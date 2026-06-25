@@ -203,12 +203,18 @@ function simOil(x,y,i) {
 }
 
 function simFire(x,y,i) {
-  if (rng() < 0.12) { grid[i]=EMPTY; return; }
+  // Die chance: slower near wood/oil, faster otherwise
+  let nearSlow = false;
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+    const n = get(x+dx,y+dy);
+    if (n===WOOD||n===TRUNK||n===OIL) { nearSlow=true; break; }
+  }
+  if (rng() < (nearSlow ? 0.03 : 0.15)) { grid[i]=EMPTY; return; }
   for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
     const n = get(x+dx,y+dy);
     if (n===WATER) { grid[i]=STEAM; return; }
     const flam = n===GRASS||n===VINE||n===WOOD||n===OIL||n===LEAF||n===TRUNK||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE;
-    if (flam && rng() < (n===WOOD||n===TRUNK ? 0.03 : n===OIL ? 0.08 : 0.3)) {
+    if (flam && rng() < (n===WOOD||n===TRUNK ? 0.04 : n===OIL ? 0.3 : 0.4)) {
       set(x+dx,y+dy,FIRE);
     }
   }
