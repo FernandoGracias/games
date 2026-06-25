@@ -224,8 +224,9 @@ function simFire(x,y,i) {
     if (n===POWDER && rng()<0.8) { explode(x+dx,y+dy); return; }
     // Oil: original spread rate (30%)
     if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); }
-    // Wood/trunk: ignites slowly
-    else if ((n===WOOD||n===TRUNK) && rng()<0.04) { set(x+dx,y+dy,FIRE); }
+    // Wood/trunk: ignites slowly, but chars heavily
+    else if ((n===WOOD||n===TRUNK) && rng()<0.01) { set(x+dx,y+dy,FIRE); }
+    else if ((n===WOOD||n===TRUNK) && rng()<0.08) { set(x+dx,y+dy,CHARCOAL); }
     // Charcoal catches fire
     else if (n===CHARCOAL && rng()<0.04) { set(x+dx,y+dy,FIRE); }
     // Other flammables: normal rate
