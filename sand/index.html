@@ -353,75 +353,109 @@ function updateSapling(x, y) {
 
 // Grown grass is static, occasionally flowers, grows more when watered
 function updateGrass(x, y) {
-  if (Math.random() > 0.1) return; // Only process 10% of grass per frame
-  // Consume adjacent water to grow
+  if (Math.random() > 0.08) return;
+
+  // Water passes through grass — let it fall
+  if (get(x, y - 1) === WATER) {
+    // Swap water down through the grass
+    swap(x, y, x, y - 1);
+    updated[idx(x, y - 1)] = 1;
+    return;
+  }
+
+  // Determine height above ground (count grass/soil/root below)
+  let heightAboveGround = 0;
+  for (let dy = 1; dy <= 4; dy++) {
+    const below = get(x, y + dy);
+    if (below === GRASS || below === FLOWER) heightAboveGround++;
+    else break;
+  }
+
+  // Max height 3 — don't grow up past that
+  const maxHeight = 3;
+
+  // Look for adjacent water to consume and grow
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       const n = get(x + dx, y + dy);
-      if (n === WATER && Math.random() < 0.5) {
-        set(x + dx, y + dy, GRASS);
-        updated[idx(x + dx, y + dy)] = 1;
+      if (n === WATER) {
+        // Grow sideways (strongly preferred) or up if below max height
+        if (Math.random() < 0.7 && (isEmpty(x - 1, y) || isEmpty(x + 1, y))) {
+          // Grow sideways
+          const d = isEmpty(x - 1, y) && isEmpty(x + 1, y) ? (Math.random() < 0.5 ? -1 : 1) : (isEmpty(x - 1, y) ? -1 : 1);
+          set(x + d, y, GRASS);
+          updated[idx(x + d, y)] = 1;
+        } else if (heightAboveGround < maxHeight && isEmpty(x, y - 1)) {
+          // Grow up
+          set(x, y - 1, GRASS);
+          updated[idx(x, y - 1)] = 1;
+        }
+        // Consume the water
+        set(x + dx, y + dy, EMPTY);
         return;
       }
     }
   }
-  // Occasional wildflower
-  if (Math.random() < 0.002 && isEmpty(x, y - 1)) {
+  // Occasional wildflower on top
+  if (Math.random() < 0.003 && isEmpty(x, y - 1) && get(x, y + 1) === GRASS) {
     set(x, y - 1, FLOWER);
   }
 }
 
 // Vine grows aggressively in all directions when water nearby
+// Vine: single-pixel strings that climb upward, occasionally branch
 function updateVine(x, y) {
-  if (Math.random() > 0.06) return;
+  // Water passes through vine
+  if (get(x, y - 1) === WATER) {
+    swap(x, y, x, y - 1);
+    updated[idx(x, y - 1)] = 1;
+    return;
+  }
 
-  // Only grow from tips (cells with fewer than 2 vine neighbors)
+  if (Math.random() > 0.04) return;
+
+  // Only grow from true tips — cells with exactly 1 vine neighbor (endpoints)
   let vineNeighbors = 0;
   for (let dx = -1; dx <= 1; dx++)
     for (let dy = -1; dy <= 1; dy++)
       if ((dx || dy) && get(x + dx, y + dy) === VINE) vineNeighbors++;
-  if (vineNeighbors >= 2 && Math.random() > 0.05) return; // Only tips grow, rare branching
 
-  // Need water within 3 cells
+  // Strict: only endpoints grow. Very rare branching from non-tips.
+  if (vineNeighbors > 1 && Math.random() > 0.01) return;
+
+  // Need water within 2 cells to grow
   let hasWater = false;
-  for (let dx = -3; dx <= 3 && !hasWater; dx++)
-    for (let dy = -3; dy <= 3 && !hasWater; dy++)
+  for (let dx = -2; dx <= 2 && !hasWater; dx++)
+    for (let dy = -2; dy <= 2 && !hasWater; dy++)
       if (get(x + dx, y + dy) === WATER) hasWater = true;
   if (!hasWater) return;
 
-  // Prefer growing up, especially along solid surfaces
+  // Strongly prefer up. Climb surfaces.
   let hasSurface = false;
   for (let dx = -1; dx <= 1; dx += 2) {
     const n = get(x + dx, y);
-    if (n !== EMPTY && n !== VINE && n !== WATER) hasSurface = true;
+    if (n !== EMPTY && n !== VINE && n !== WATER && n !== GRASS) hasSurface = true;
   }
 
-  // Direction preference: up > up-side > side > down
-  let candidates = [];
-  if (isEmpty(x, y - 1)) candidates.push([0, -1, hasSurface ? 6 : 3]); // up (strongly preferred near surfaces)
-  if (isEmpty(x - 1, y - 1)) candidates.push([-1, -1, 2]);
-  if (isEmpty(x + 1, y - 1)) candidates.push([1, -1, 2]);
-  if (isEmpty(x - 1, y)) candidates.push([-1, 0, 1]);
-  if (isEmpty(x + 1, y)) candidates.push([1, 0, 1]);
-  if (isEmpty(x, y + 1)) candidates.push([0, 1, 0.3]); // down (rarely)
-
-  if (candidates.length === 0) return;
-
-  // Weighted random pick
-  const totalW = candidates.reduce((s, c) => s + c[2], 0);
-  let r = Math.random() * totalW;
-  for (const [dx, dy, w] of candidates) {
-    r -= w;
-    if (r <= 0) {
-      set(x + dx, y + dy, VINE);
-      updated[idx(x + dx, y + dy)] = 1;
-      // Consume nearby water occasionally
-      for (let ddx = -1; ddx <= 1; ddx++)
-        for (let ddy = -1; ddy <= 1; ddy++)
-          if (get(x + ddx, y + ddy) === WATER && Math.random() < 0.3) set(x + ddx, y + ddy, EMPTY);
-      return;
+  // Growth direction: almost always up
+  if (isEmpty(x, y - 1) && Math.random() < (hasSurface ? 0.85 : 0.7)) {
+    set(x, y - 1, VINE); updated[idx(x, y - 1)] = 1;
+  } else {
+    // Occasionally branch sideways or diagonal-up
+    const sides = [];
+    if (isEmpty(x - 1, y - 1)) sides.push([-1, -1]);
+    if (isEmpty(x + 1, y - 1)) sides.push([1, -1]);
+    if (isEmpty(x - 1, y)) sides.push([-1, 0]);
+    if (isEmpty(x + 1, y)) sides.push([1, 0]);
+    if (sides.length > 0) {
+      const [dx, dy] = sides[Math.random() * sides.length | 0];
+      set(x + dx, y + dy, VINE); updated[idx(x + dx, y + dy)] = 1;
     }
   }
+  // Consume a nearby water cell
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++)
+      if (get(x + dx, y + dy) === WATER) { set(x + dx, y + dy, EMPTY); return; }
 }
 
 // Soil: falls like sand, absorbs water on contact
