@@ -383,9 +383,9 @@ function render() {
   for (let i = 0; i < len; i++) {
     const t = grid[i];
     if (t === FIRE) {
-      // Multi-color fire: random orange/yellow/red each frame
-      const r = 255, g = 80 + (rng()*120|0), b = rng()*40|0;
-      buf32[i] = 0xFF000000 | (b << 16) | (g << 8) | r;
+      // Multi-color fire: R=255, G=100-200, B=0 (orange to yellow flicker)
+      const g = 100 + (rng()*100|0);
+      buf32[i] = 0xFF000000 | (g << 8) | 255;
     } else if (sources[i] && t === EMPTY) {
       const c = COLORS[sources[i]];
       buf32[i] = (c & 0xFF000000) | (Math.min(255,((c>>16)&0xFF)+40)<<16) | (Math.min(255,((c>>8)&0xFF)+40)<<8) | Math.min(255,(c&0xFF)+40);
