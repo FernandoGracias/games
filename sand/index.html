@@ -80,7 +80,7 @@ function getColor(type) {
     case VINE_SEED: return [80, 160, 80];
     case TREE_SEED: return [120, 90, 50];
     case GRASS: return [30, 180, 50];
-    case VINE: return [10, 200, 60];
+    case VINE: return [0, 140, 40];
     case TRUNK: return [80, 55, 20];
     case LEAF: return [20, 150, 30];
     case FLOWER: return [220, 80, 160];
@@ -373,29 +373,53 @@ function updateGrass(x, y) {
 
 // Vine grows aggressively in all directions when water nearby
 function updateVine(x, y) {
-  if (Math.random() > 0.1) return; // Only process 10% per frame
-  // Check immediate neighbors for water — consume and grow
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER && Math.random() < 0.5) {
-        set(x + dx, y + dy, VINE);
-        updated[idx(x + dx, y + dy)] = 1;
-        return;
-      }
-    }
+  if (Math.random() > 0.06) return;
+
+  // Only grow from tips (cells with fewer than 2 vine neighbors)
+  let vineNeighbors = 0;
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++)
+      if ((dx || dy) && get(x + dx, y + dy) === VINE) vineNeighbors++;
+  if (vineNeighbors >= 2 && Math.random() > 0.05) return; // Only tips grow, rare branching
+
+  // Need water within 3 cells
+  let hasWater = false;
+  for (let dx = -3; dx <= 3 && !hasWater; dx++)
+    for (let dy = -3; dy <= 3 && !hasWater; dy++)
+      if (get(x + dx, y + dy) === WATER) hasWater = true;
+  if (!hasWater) return;
+
+  // Prefer growing up, especially along solid surfaces
+  let hasSurface = false;
+  for (let dx = -1; dx <= 1; dx += 2) {
+    const n = get(x + dx, y);
+    if (n !== EMPTY && n !== VINE && n !== WATER) hasSurface = true;
   }
-  // Grow into empty space if water within 2 cells
-  if (Math.random() < 0.3) {
-    let hasWater = false;
-    outer: for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -2; dy <= 2; dy++) {
-        if (get(x + dx, y + dy) === WATER) { hasWater = true; break outer; }
-      }
-    }
-    if (hasWater) {
-      const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-      const [dx, dy] = dirs[Math.random() * dirs.length | 0];
-      if (isEmpty(x + dx, y + dy)) { set(x + dx, y + dy, VINE); updated[idx(x + dx, y + dy)] = 1; }
+
+  // Direction preference: up > up-side > side > down
+  let candidates = [];
+  if (isEmpty(x, y - 1)) candidates.push([0, -1, hasSurface ? 6 : 3]); // up (strongly preferred near surfaces)
+  if (isEmpty(x - 1, y - 1)) candidates.push([-1, -1, 2]);
+  if (isEmpty(x + 1, y - 1)) candidates.push([1, -1, 2]);
+  if (isEmpty(x - 1, y)) candidates.push([-1, 0, 1]);
+  if (isEmpty(x + 1, y)) candidates.push([1, 0, 1]);
+  if (isEmpty(x, y + 1)) candidates.push([0, 1, 0.3]); // down (rarely)
+
+  if (candidates.length === 0) return;
+
+  // Weighted random pick
+  const totalW = candidates.reduce((s, c) => s + c[2], 0);
+  let r = Math.random() * totalW;
+  for (const [dx, dy, w] of candidates) {
+    r -= w;
+    if (r <= 0) {
+      set(x + dx, y + dy, VINE);
+      updated[idx(x + dx, y + dy)] = 1;
+      // Consume nearby water occasionally
+      for (let ddx = -1; ddx <= 1; ddx++)
+        for (let ddy = -1; ddy <= 1; ddy++)
+          if (get(x + ddx, y + ddy) === WATER && Math.random() < 0.3) set(x + ddx, y + ddy, EMPTY);
+      return;
     }
   }
 }
