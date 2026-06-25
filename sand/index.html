@@ -294,24 +294,25 @@ function updateApple(x, y) {
   if (!supported) fall(x, y, true);
 }
 
-// Sapling: grows upward gradually into a tree
+// Sapling: grows upward gradually into a tree, needs water to keep growing
 function updateSapling(x, y) {
-  if (Math.random() > 0.02) return; // Slow growth — ~1 growth event per second per sapling
+  if (Math.random() > 0.03) return;
 
-  // Grow trunk upward
-  if (isEmpty(x, y - 1)) {
+  // Count trunk below to determine current height
+  let height = 0;
+  for (let dy = 1; dy < 20; dy++) {
+    if (get(x, y + dy) === TRUNK) height++;
+    else break;
+  }
+
+  // Target height: 5-12 cells (determined by position hash for consistency)
+  const maxHeight = 5 + ((x * 7 + 13) % 8);
+
+  if (height >= maxHeight) {
+    // Mature — sprout crown and stop
     set(x, y, TRUNK);
-    set(x, y - 1, SAPLING);
-    updated[idx(x, y - 1)] = 1;
-  } else {
-    // Can't grow up anymore — mature into a tree crown
-    set(x, y, TRUNK);
-
-    // Decide tree type: 50% deciduous (apple), 50% pine
-    const isPine = Math.random() < 0.5;
-
+    const isPine = ((x * 31) % 2) === 0;
     if (isPine) {
-      // Pine: triangular leaf shape
       for (let layer = 0; layer < 4; layer++) {
         const width = 4 - layer;
         const ly = y - 1 - layer;
@@ -319,21 +320,45 @@ function updateSapling(x, y) {
           if (isEmpty(x + lx, ly)) set(x + lx, ly, LEAF);
         }
       }
-      // Top point
       if (isEmpty(x, y - 5)) set(x, y - 5, LEAF);
     } else {
-      // Deciduous: round canopy with occasional apples
       const radius = 3;
       for (let dx = -radius; dx <= radius; dx++) {
-        for (let dy = -radius; dy <= radius; dy++) {
-          if (dx * dx + dy * dy <= radius * radius) {
-            const lx = x + dx, ly = y - 2 + dy;
+        for (let dy2 = -radius; dy2 <= radius; dy2++) {
+          if (dx * dx + dy2 * dy2 <= radius * radius) {
+            const lx = x + dx, ly = y - 2 + dy2;
             if (inBounds(lx, ly) && isEmpty(lx, ly)) {
               if (Math.random() < 0.08) set(lx, ly, APPLE);
               else set(lx, ly, LEAF);
             }
           }
         }
+      }
+    }
+    return;
+  }
+
+  // Need water nearby to grow
+  let waterFound = false;
+  for (let dx = -3; dx <= 3 && !waterFound; dx++) {
+    for (let dy2 = -3; dy2 <= 3 && !waterFound; dy2++) {
+      if (get(x + dx, y + dy2) === WATER || get(x + dx, y + dy2) === WET_SOIL) waterFound = true;
+    }
+  }
+  if (!waterFound) return;
+
+  // Grow upward
+  if (isEmpty(x, y - 1)) {
+    set(x, y, TRUNK);
+    set(x, y - 1, SAPLING);
+    updated[idx(x, y - 1)] = 1;
+  } else {
+    // Blocked — mature early
+    set(x, y, TRUNK);
+    // Small crown
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy2 = -2; dy2 <= 0; dy2++) {
+        if (dx * dx + dy2 * dy2 <= 4 && isEmpty(x + dx, y - 1 + dy2)) set(x + dx, y - 1 + dy2, LEAF);
       }
     }
   }
