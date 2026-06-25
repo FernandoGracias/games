@@ -222,39 +222,49 @@ function simFire(x,y,i) {
 
   if (nearWood) {
     // WOOD FIRE: burns in place for a long time (~600 frames / 10 sec)
-    // Chars adjacent wood slowly while burning
-    if (rng() < 0.02) {
+    // Chars adjacent wood while burning
+    if (rng() < 0.06) {
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
         const n=get(x+dx,y+dy);
-        if ((n===WOOD||n===TRUNK) && rng()<0.3) { set(x+dx,y+dy,CHARCOAL); break; }
+        if ((n===WOOD||n===TRUNK) && rng()<0.5) { set(x+dx,y+dy,CHARCOAL); break; }
       }
     }
-    // After ~600 frames, spread and die
+    // After burn time, spread and become charcoal
     if (age > 400 + (rng()*400|0)) {
-      // Almost always spread (95%), rarely just die
-      let spread = false;
-      if (rng() < 0.95) {
-        for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-          const n=get(x+dx,y+dy);
-          if ((n===WOOD||n===TRUNK||n===CHARCOAL) && rng()<0.5) {
-            set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; spread=true; break;
-          }
+      // Try to spread — keep trying all neighbors until one works
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+        const n=get(x+dx,y+dy);
+        if (n===WOOD||n===TRUNK||n===CHARCOAL) {
+          set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0;
+          grid[i]=CHARCOAL; fireAge[i]=0;
+          return;
         }
       }
+      // No wood to spread to — just become charcoal
       grid[i]=CHARCOAL; fireAge[i]=0;
       return;
     }
-    // Almost never goes out while fuel is present
-    if (rng()<0.001) { grid[i]=CHARCOAL; fireAge[i]=0; return; }
+    // Never goes out while fuel is present
   } else if (nearOil) {
-    // OIL FIRE: original behavior — never goes out, spreads at 30%
+    // OIL FIRE: never goes out, spreads at 30%
     for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
       const n=get(x+dx,y+dy);
       if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
     }
   } else {
-    // FREE FIRE: no fuel, dies after a moment (open flame / embers rising)
-    if (rng()<0.08) { grid[i]=EMPTY; fireAge[i]=0; return; }
+    // FREE FIRE (open flame / rising embers): try to jump to wood before dying
+    if (rng()<0.04) {
+      // Before dying, try to spread to any nearby flammable
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+        const n=get(x+dx,y+dy);
+        if (n===WOOD||n===TRUNK||n===OIL||n===GRASS||n===VINE||n===LEAF) {
+          set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0;
+          grid[i]=EMPTY; fireAge[i]=0;
+          return;
+        }
+      }
+      grid[i]=EMPTY; fireAge[i]=0; return;
+    }
   }
 
   // General interactions
