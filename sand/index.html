@@ -247,6 +247,7 @@ function updateSteam(x, y) {
 let drawing = false;
 let currentElement = SAND;
 let lastPaintX = -1, lastPaintY = -1;
+let lastRawX = -1, lastRawY = -1;
 const elementMap = { sand: SAND, water: WATER, grass: GRASS, fire: FIRE, oil: OIL, wood: WOOD, stone: STONE, salt: SALT, eraser: EMPTY };
 
 document.querySelectorAll('.btn[data-el]').forEach(btn => {
@@ -303,12 +304,12 @@ function paint(ex, ey) {
   lastPaintY = cy;
 }
 
-canvas.addEventListener('mousedown', (e) => { drawing = true; lastPaintX = -1; lastPaintY = -1; paint(e.clientX, e.clientY); });
-canvas.addEventListener('mousemove', (e) => { if (drawing) paint(e.clientX, e.clientY); });
+canvas.addEventListener('mousedown', (e) => { drawing = true; lastPaintX = -1; lastPaintY = -1; lastRawX = e.clientX; lastRawY = e.clientY; paint(e.clientX, e.clientY); });
+canvas.addEventListener('mousemove', (e) => { if (drawing) { lastRawX = e.clientX; lastRawY = e.clientY; paint(e.clientX, e.clientY); } });
 canvas.addEventListener('mouseup', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
 canvas.addEventListener('mouseleave', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
-canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; lastPaintX = -1; lastPaintY = -1; paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
-canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (drawing) paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; lastPaintX = -1; lastPaintY = -1; lastRawX = e.touches[0].clientX; lastRawY = e.touches[0].clientY; paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
+canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (drawing) { lastRawX = e.touches[0].clientX; lastRawY = e.touches[0].clientY; paint(e.touches[0].clientX, e.touches[0].clientY); } }, {passive: false});
 canvas.addEventListener('touchend', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
 
 // Render
@@ -338,6 +339,13 @@ function render() {
 }
 
 function loop() {
+  // Continuously dispense while held down
+  if (drawing && lastRawX >= 0) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (lastRawX - rect.left) / SCALE | 0;
+    const cy = (lastRawY - rect.top) / SCALE | 0;
+    paintAt(cx, cy);
+  }
   simulate();
   simulate(); // 2 sim steps per frame for snappier feel
   render();
