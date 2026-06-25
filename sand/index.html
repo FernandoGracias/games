@@ -112,30 +112,10 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources
+  // Sources emit into their cell when empty
   for (let i = 0; i < sources.length; i++) {
     if (!sources[i]) continue;
-    const sx = i % W, sy = (i / W) | 0;
-    const srcType = sources[i];
-    if (srcType === FIRE) { if (grid[i] === EMPTY) grid[i] = FIRE; continue; }
-    if (grid[i] === EMPTY) { grid[i] = srcType; }
-    else if (grid[i] === srcType) {
-      for (let dy = 1; dy <= sy; dy++) {
-        const ai = idx(sx, sy - dy);
-        if (grid[ai] === EMPTY) { grid[ai] = srcType; break; }
-        const at = grid[ai];
-        if (at === STONE || at === WOOD || at === GRASS || at === VINE || at === TRUNK || at === LEAF) break;
-        if (at === SAND || at === SALT) {
-          grid[ai] = srcType;
-          let placed = false;
-          for (let ddy = 1; sy + ddy < H; ddy++) { if (grid[idx(sx, sy + ddy)] === EMPTY) { grid[idx(sx, sy + ddy)] = at; placed = true; break; } }
-          if (!placed) grid[ai] = at;
-          break;
-        }
-        if (at === srcType) continue;
-        break;
-      }
-    }
+    if (grid[i] === EMPTY) grid[i] = sources[i];
   }
 
   const dir = tick % 2 === 0 ? 1 : -1;
