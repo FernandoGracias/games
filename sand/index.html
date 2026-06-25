@@ -216,7 +216,7 @@ function simFire(x,y,i) {
     if (n===WOOD||n===TRUNK||n===CHARCOAL) nearWood=true;
   }
   if (!nearOil) {
-    if (rng() < (nearWood ? 0.02 : 0.15)) { grid[i]=EMPTY; return; }
+    if (rng() < (nearWood ? 0.02 : 0.15)) { grid[i] = nearWood ? CHARCOAL : EMPTY; return; }
   }
   for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
     const n = get(x+dx,y+dy);
@@ -224,9 +224,9 @@ function simFire(x,y,i) {
     if (n===POWDER && rng()<0.8) { explode(x+dx,y+dy); return; }
     // Oil: original spread rate (30%)
     if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); }
-    // Wood/trunk: very slow burn — chars first, doesn't ignite directly
-    else if ((n===WOOD||n===TRUNK) && rng()<0.01) { set(x+dx,y+dy,CHARCOAL); }
-    // Charcoal catches fire slowly
+    // Wood/trunk: ignites slowly
+    else if ((n===WOOD||n===TRUNK) && rng()<0.04) { set(x+dx,y+dy,FIRE); }
+    // Charcoal catches fire
     else if (n===CHARCOAL && rng()<0.04) { set(x+dx,y+dy,FIRE); }
     // Other flammables: normal rate
     else if ((n===GRASS||n===VINE||n===LEAF||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE) && rng()<0.3) { set(x+dx,y+dy,FIRE); }
