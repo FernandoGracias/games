@@ -112,44 +112,48 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources emit
+  // Sources emit with pressure physics (BFS to find nearest empty reachable through liquid)
   for (let i = 0; i < sources.length; i++) {
     if (!sources[i]) continue;
     const srcType = sources[i];
-    // Emit into own cell when empty
     if (grid[i] === EMPTY) {
       grid[i] = srcType;
       continue;
     }
-    // Only water/oil well up, and ONLY when fully submerged
+    // Only water/oil have pressure
     if (srcType !== WATER && srcType !== OIL) continue;
     if (grid[i] !== srcType) continue;
 
+    // BFS: find nearest empty cell reachable through connected same-type liquid
     const sx = i % W, sy = (i / W) | 0;
+    const visited = new Uint8Array(W * H);
+    const queue = [[sx, sy]];
+    visited[i] = 1;
+    let found = false;
+    let steps = 0;
+    const maxSteps = 200; // cap search to avoid perf issues
 
-    // Check: is there ANY empty space below or at same level nearby?
-    // If so, don't well — the liquid should flow there via normal physics
-    let canFlowDown = false;
-    if (sy + 1 < H && grid[idx(sx, sy + 1)] === EMPTY) canFlowDown = true;
-    if (sx > 0 && grid[idx(sx - 1, sy)] === EMPTY) canFlowDown = true;
-    if (sx < W - 1 && grid[idx(sx + 1, sy)] === EMPTY) canFlowDown = true;
-    if (sy + 1 < H && sx > 0 && grid[idx(sx - 1, sy + 1)] === EMPTY) canFlowDown = true;
-    if (sy + 1 < H && sx < W - 1 && grid[idx(sx + 1, sy + 1)] === EMPTY) canFlowDown = true;
-    if (canFlowDown) continue;
-
-    // Fully submerged — well up: place one cell above the liquid surface
-    if (sy > 0 && grid[idx(sx, sy - 1)] === EMPTY) {
-      grid[idx(sx, sy - 1)] = srcType;
-    } else if (sy > 0 && grid[idx(sx, sy - 1)] === srcType) {
-      // Find top of liquid column
-      for (let dy = 2; dy <= sy; dy++) {
-        const cell = grid[idx(sx, sy - dy)];
+    while (queue.length > 0 && steps < maxSteps) {
+      steps++;
+      const [cx, cy] = queue.shift();
+      // Check neighbors: down first, then sides, then up (priority order)
+      const neighbors = [[cx, cy+1], [cx-1, cy], [cx+1, cy], [cx, cy-1]];
+      for (const [nx, ny] of neighbors) {
+        if (!inBounds(nx, ny)) continue;
+        const ni = idx(nx, ny);
+        if (visited[ni]) continue;
+        visited[ni] = 1;
+        const cell = grid[ni];
         if (cell === EMPTY) {
-          grid[idx(sx, sy - dy)] = srcType;
+          grid[ni] = srcType;
+          found = true;
           break;
         }
-        if (cell !== srcType) break; // hit a wall, stop
+        if (cell === srcType) queue.push([nx, ny]);
+        // Oil can also path through water
+        if (srcType === OIL && cell === WATER) queue.push([nx, ny]);
       }
+      if (found) break;
     }
   }
 
