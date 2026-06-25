@@ -12,7 +12,10 @@ body { background: #111; display: flex; flex-direction: column; height: 100vh; o
 .btn.active { border-color: #fff; background: #555; }
 .btn:hover { background: #444; }
 .size-label { color: #aaa; font-size: 11px; margin-left: 8px; }
-canvas { flex: 1; cursor: crosshair; image-rendering: pixelated; }
+.source-label { color: #aaa; font-size: 11px; margin-left: 8px; display: flex; align-items: center; gap: 4px; }
+.source-label input { cursor: pointer; }
+canvas { flex: 1; image-rendering: pixelated; }
+#cursor { position: fixed; pointer-events: none; border: 1.5px solid rgba(255,255,255,0.7); border-radius: 50%; transform: translate(-50%, -50%); z-index: 999; }
 </style>
 </head>
 <body>
@@ -27,16 +30,18 @@ canvas { flex: 1; cursor: crosshair; image-rendering: pixelated; }
   <button class="btn" data-el="salt">Salt</button>
   <button class="btn" data-el="eraser">Eraser</button>
   <span class="size-label">Size: <input type="range" id="brushSize" min="0" max="12" value="3" style="vertical-align:middle;width:60px;"></span>
+  <label class="source-label"><input type="checkbox" id="sourceMode"> Source</label>
   <button class="btn" id="clearBtn" style="margin-left:auto;">Clear</button>
 </div>
 <canvas id="c"></canvas>
+<div id="cursor"></div>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const cursorEl = document.getElementById('cursor');
 
-// Simulation grid
 const SCALE = 3;
-let W, H, grid, updated;
+let W, H, grid, sources, updated;
 
 function resize() {
   const rect = canvas.getBoundingClientRect();
@@ -45,15 +50,14 @@ function resize() {
   W = Math.floor(canvas.width / SCALE);
   H = Math.floor(canvas.height / SCALE);
   grid = new Array(W * H).fill(0);
+  sources = new Array(W * H).fill(0); // 0 = not a source, >0 = element type to emit
   updated = new Uint8Array(W * H);
 }
 resize();
 window.addEventListener('resize', () => { resize(); });
 
-// Element types
 const EMPTY = 0, SAND = 1, WATER = 2, GRASS = 3, FIRE = 4, OIL = 5, WOOD = 6, STONE = 7, SALT = 8, VINE = 9, STEAM = 10;
 
-// Element colors — solid per type
 function getColor(type) {
   switch(type) {
     case SAND: return [194, 178, 128];
@@ -86,7 +90,14 @@ let tick = 0;
 function simulate() {
   tick++;
   updated.fill(0);
-  // Alternate scan direction each frame to reduce bias
+
+  // Sources emit their element
+  for (let i = 0; i < sources.length; i++) {
+    if (sources[i] && grid[i] === EMPTY) {
+      grid[i] = sources[i];
+    }
+  }
+
   const dir = tick % 2 === 0 ? 1 : -1;
   const startX = dir === 1 ? 0 : W - 1;
 
@@ -108,7 +119,6 @@ function simulate() {
         case VINE: updateVine(x, y); break;
         case STEAM: updateSteam(x, y); break;
         case SALT: updateSalt(x, y); break;
-        // WOOD, STONE: static
       }
     }
   }
@@ -130,19 +140,11 @@ function fall(x, y, canDisplace) {
 function flowSide(x, y, spread) {
   const d = Math.random() < 0.5 ? -1 : 1;
   for (let i = 1; i <= spread; i++) {
-    if (isEmpty(x + d * i, y)) {
-      swap(x, y, x + d * i, y);
-      updated[idx(x + d * i, y)] = 1;
-      return true;
-    }
+    if (isEmpty(x + d * i, y)) { swap(x, y, x + d * i, y); updated[idx(x + d * i, y)] = 1; return true; }
     if (get(x + d * i, y) !== EMPTY) break;
   }
   for (let i = 1; i <= spread; i++) {
-    if (isEmpty(x - d * i, y)) {
-      swap(x, y, x - d * i, y);
-      updated[idx(x - d * i, y)] = 1;
-      return true;
-    }
+    if (isEmpty(x - d * i, y)) { swap(x, y, x - d * i, y); updated[idx(x - d * i, y)] = 1; return true; }
     if (get(x - d * i, y) !== EMPTY) break;
   }
   return false;
@@ -151,13 +153,9 @@ function flowSide(x, y, spread) {
 function updateSand(x, y) { fall(x, y, true); }
 
 function updateSalt(x, y) {
-  // Salt falls like sand but dissolves in water
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER && Math.random() < 0.02) {
-        set(x, y, EMPTY);
-        return;
-      }
+      if (get(x + dx, y + dy) === WATER && Math.random() < 0.02) { set(x, y, EMPTY); return; }
     }
   }
   fall(x, y, true);
@@ -168,13 +166,11 @@ function updateWater(x, y) {
 }
 
 function updateOil(x, y) {
-  // Oil floats on water — swap up if water is above? No, just falls slower and flows
   if (get(x, y + 1) === WATER) { swap(x, y, x, y + 1); updated[idx(x, y + 1)] = 1; return; }
   if (!fall(x, y, false)) flowSide(x, y, 3);
 }
 
 function updateGrass(x, y) {
-  // Grass grows vines aggressively when touching water
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       if (get(x + dx, y + dy) === WATER && Math.random() < 0.2) {
@@ -186,56 +182,60 @@ function updateGrass(x, y) {
 }
 
 function updateVine(x, y) {
-  // Vine grows aggressively in random directions when near water
   if (Math.random() < 0.15) {
     const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
     const [dx, dy] = dirs[Math.random() * dirs.length | 0];
     const nx = x + dx, ny = y + dy;
     if (isEmpty(nx, ny)) {
-      // Grow if water is within 4 cells
       let hasWater = false;
-      for (let ddx = -4; ddx <= 4 && !hasWater; ddx++) {
-        for (let ddy = -4; ddy <= 4 && !hasWater; ddy++) {
+      for (let ddx = -4; ddx <= 4 && !hasWater; ddx++)
+        for (let ddy = -4; ddy <= 4 && !hasWater; ddy++)
           if (get(nx + ddx, ny + ddy) === WATER) hasWater = true;
-        }
-      }
       if (hasWater) { set(nx, ny, VINE); updated[idx(nx, ny)] = 1; }
     }
   }
-  // Vines can also spontaneously sprout grass at tips
   if (Math.random() < 0.01) {
-    let openNeighbors = 0;
+    let open = 0;
     for (let dx = -1; dx <= 1; dx++)
       for (let dy = -1; dy <= 1; dy++)
-        if (isEmpty(x + dx, y + dy)) openNeighbors++;
-    if (openNeighbors >= 5) set(x, y, GRASS);
+        if (isEmpty(x + dx, y + dy)) open++;
+    if (open >= 5) set(x, y, GRASS);
   }
 }
 
 function updateFire(x, y) {
-  // Fire burns upward and dies quickly
-  if (Math.random() < 0.15) { set(x, y, EMPTY); return; }
-  // Spread to flammable neighbors
+  // Fire on wood burns much slower than on grass/oil
+  let onWood = false;
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++)
+      if (get(x + dx, y + dy) === WOOD) onWood = true;
+
+  // Die chance: very slow on wood, fast otherwise
+  const dieChance = onWood ? 0.02 : 0.15;
+  if (Math.random() < dieChance) { set(x, y, EMPTY); return; }
+
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       const n = get(x + dx, y + dy);
-      if ((n === GRASS || n === VINE || n === WOOD || n === OIL) && Math.random() < 0.3) {
+      if (n === WOOD && Math.random() < 0.04) {
+        set(x + dx, y + dy, FIRE);
+        updated[idx(x + dx, y + dy)] = 1;
+      } else if ((n === GRASS || n === VINE) && Math.random() < 0.4) {
+        set(x + dx, y + dy, FIRE);
+        updated[idx(x + dx, y + dy)] = 1;
+      } else if (n === OIL && Math.random() < 0.6) {
         set(x + dx, y + dy, FIRE);
         updated[idx(x + dx, y + dy)] = 1;
       }
-      if (n === WATER) {
-        set(x, y, STEAM);
-        return;
-      }
+      if (n === WATER) { set(x, y, STEAM); return; }
     }
   }
-  // Fire rises
   if (isEmpty(x, y - 1) && Math.random() < 0.4) { swap(x, y, x, y - 1); updated[idx(x, y - 1)] = 1; }
 }
 
 function updateSteam(x, y) {
   if (Math.random() < 0.02) { set(x, y, EMPTY); return; }
-  if (Math.random() < 0.01) { set(x, y, WATER); return; } // condense
+  if (Math.random() < 0.01) { set(x, y, WATER); return; }
   if (isEmpty(x, y - 1)) { swap(x, y, x, y - 1); updated[idx(x, y - 1)] = 1; }
   else {
     const d = Math.random() < 0.5 ? -1 : 1;
@@ -245,9 +245,13 @@ function updateSteam(x, y) {
 
 // Drawing
 let drawing = false;
+let resizing = false;
+let resizeStartX = 0;
+let resizeStartSize = 0;
 let currentElement = SAND;
 let lastPaintX = -1, lastPaintY = -1;
 let lastRawX = -1, lastRawY = -1;
+let mouseX = 0, mouseY = 0;
 const elementMap = { sand: SAND, water: WATER, grass: GRASS, fire: FIRE, oil: OIL, wood: WOOD, stone: STONE, salt: SALT, eraser: EMPTY };
 
 document.querySelectorAll('.btn[data-el]').forEach(btn => {
@@ -258,14 +262,24 @@ document.querySelectorAll('.btn[data-el]').forEach(btn => {
   });
 });
 
-document.getElementById('clearBtn').addEventListener('click', () => { grid.fill(0); });
+document.getElementById('clearBtn').addEventListener('click', () => { grid.fill(0); sources.fill(0); });
+
+function getBrushSize() { return parseInt(document.getElementById('brushSize').value); }
 
 function paintAt(cx, cy) {
-  const r = parseInt(document.getElementById('brushSize').value);
+  const r = getBrushSize();
+  const isSource = document.getElementById('sourceMode').checked;
   if (r === 0) {
     if (inBounds(cx, cy)) {
-      if (currentElement === EMPTY || get(cx, cy) === EMPTY || currentElement === FIRE)
+      if (isSource) {
+        sources[idx(cx, cy)] = currentElement;
+        if (grid[idx(cx, cy)] === EMPTY) grid[idx(cx, cy)] = currentElement;
+      } else if (currentElement === EMPTY) {
+        set(cx, cy, EMPTY);
+        sources[idx(cx, cy)] = 0;
+      } else if (get(cx, cy) === EMPTY || currentElement === FIRE) {
         set(cx, cy, currentElement);
+      }
     }
     return;
   }
@@ -274,7 +288,13 @@ function paintAt(cx, cy) {
       if (dx * dx + dy * dy <= r * r) {
         const px = cx + dx, py = cy + dy;
         if (inBounds(px, py)) {
-          if (currentElement === EMPTY || get(px, py) === EMPTY || currentElement === FIRE) {
+          if (isSource) {
+            sources[idx(px, py)] = currentElement;
+            if (grid[idx(px, py)] === EMPTY) grid[idx(px, py)] = currentElement;
+          } else if (currentElement === EMPTY) {
+            set(px, py, EMPTY);
+            sources[idx(px, py)] = 0;
+          } else if (get(px, py) === EMPTY || currentElement === FIRE) {
             set(px, py, currentElement);
           }
         }
@@ -287,7 +307,6 @@ function paint(ex, ey) {
   const rect = canvas.getBoundingClientRect();
   const cx = (ex - rect.left) / SCALE | 0;
   const cy = (ey - rect.top) / SCALE | 0;
-  // Interpolate from last position for continuous strokes
   if (lastPaintX >= 0) {
     const dx = cx - lastPaintX, dy = cy - lastPaintY;
     const steps = Math.max(Math.abs(dx), Math.abs(dy));
@@ -304,26 +323,83 @@ function paint(ex, ey) {
   lastPaintY = cy;
 }
 
-canvas.addEventListener('mousedown', (e) => { drawing = true; lastPaintX = -1; lastPaintY = -1; lastRawX = e.clientX; lastRawY = e.clientY; paint(e.clientX, e.clientY); });
-canvas.addEventListener('mousemove', (e) => { if (drawing) { lastRawX = e.clientX; lastRawY = e.clientY; paint(e.clientX, e.clientY); } });
-canvas.addEventListener('mouseup', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
-canvas.addEventListener('mouseleave', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
+// Cursor
+function updateCursor(x, y) {
+  mouseX = x; mouseY = y;
+  const r = getBrushSize();
+  const diameter = Math.max((r * 2 + 1) * SCALE, SCALE);
+  cursorEl.style.left = x + 'px';
+  cursorEl.style.top = y + 'px';
+  cursorEl.style.width = diameter + 'px';
+  cursorEl.style.height = diameter + 'px';
+
+  // Color the cursor border to match element
+  if (currentElement === EMPTY) {
+    cursorEl.style.borderColor = 'rgba(255,100,100,0.8)';
+  } else {
+    const [cr, cg, cb] = getColor(currentElement);
+    cursorEl.style.borderColor = `rgba(${cr},${cg},${cb},0.9)`;
+  }
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    resizing = true;
+    resizeStartX = e.clientX;
+    resizeStartSize = getBrushSize();
+    return;
+  }
+  drawing = true; lastPaintX = -1; lastPaintY = -1; lastRawX = e.clientX; lastRawY = e.clientY;
+  paint(e.clientX, e.clientY);
+});
+canvas.addEventListener('mousemove', (e) => {
+  updateCursor(e.clientX, e.clientY);
+  if (resizing) {
+    const delta = Math.round((e.clientX - resizeStartX) / 8);
+    const newSize = Math.max(0, Math.min(12, resizeStartSize + delta));
+    document.getElementById('brushSize').value = newSize;
+    updateCursor(e.clientX, e.clientY);
+    return;
+  }
+  if (drawing) { lastRawX = e.clientX; lastRawY = e.clientY; paint(e.clientX, e.clientY); }
+});
+canvas.addEventListener('mouseup', () => { drawing = false; resizing = false; lastPaintX = -1; lastPaintY = -1; });
+canvas.addEventListener('mouseleave', () => { drawing = false; resizing = false; lastPaintX = -1; lastPaintY = -1; cursorEl.style.display = 'none'; });
+canvas.addEventListener('mouseenter', (e) => { cursorEl.style.display = 'block'; updateCursor(e.clientX, e.clientY); });
+
 canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; lastPaintX = -1; lastPaintY = -1; lastRawX = e.touches[0].clientX; lastRawY = e.touches[0].clientY; paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
 canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (drawing) { lastRawX = e.touches[0].clientX; lastRawY = e.touches[0].clientY; paint(e.touches[0].clientX, e.touches[0].clientY); } }, {passive: false});
 canvas.addEventListener('touchend', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
+
+// Hide default cursor over canvas
+canvas.style.cursor = 'none';
 
 // Render
 const imgData = ctx.createImageData(canvas.width, canvas.height);
 
 function render() {
   const data = imgData.data;
-  data.fill(0); // black background
+  data.fill(0);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const type = grid[idx(x, y)];
-      if (type === EMPTY) continue;
-      const [r, g, b] = getColor(type);
-      // Fill the SCALE x SCALE block
+      const i = idx(x, y);
+      const type = grid[i];
+      if (type === EMPTY && !sources[i]) continue;
+
+      let r, g, b;
+      if (type !== EMPTY) {
+        [r, g, b] = getColor(type);
+      } else {
+        [r, g, b] = getColor(sources[i]);
+      }
+
+      // Source indicators: slightly brighter
+      if (sources[i]) {
+        r = Math.min(255, r + 40);
+        g = Math.min(255, g + 40);
+        b = Math.min(255, b + 40);
+      }
+
       for (let sy = 0; sy < SCALE; sy++) {
         for (let sx = 0; sx < SCALE; sx++) {
           const pi = ((y * SCALE + sy) * canvas.width + (x * SCALE + sx)) * 4;
@@ -339,7 +415,6 @@ function render() {
 }
 
 function loop() {
-  // Continuously dispense while held down
   if (drawing && lastRawX >= 0) {
     const rect = canvas.getBoundingClientRect();
     const cx = (lastRawX - rect.left) / SCALE | 0;
@@ -347,7 +422,7 @@ function loop() {
     paintAt(cx, cy);
   }
   simulate();
-  simulate(); // 2 sim steps per frame for snappier feel
+  simulate();
   render();
   requestAnimationFrame(loop);
 }
