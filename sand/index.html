@@ -155,7 +155,7 @@ function simulate() {
         case SAPLING: simSapling(x, y, i); break;
         case APPLE: simApple(x, y, i); break;
         case POWDER: fall(x, y, i, true); break;
-        case CHARCOAL: if(rng()<0.005) grid[i]=EMPTY; break;
+        case CHARCOAL: if(rng()<0.003) grid[i]=EMPTY; break;
       }
     }
   }
@@ -231,11 +231,14 @@ function simFire(x,y,i) {
     }
     // After ~600 frames, spread and die
     if (age > 400 + (rng()*400|0)) {
-      // Spread to one adjacent wood/charcoal then become charcoal
-      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-        const n=get(x+dx,y+dy);
-        if ((n===WOOD||n===TRUNK||n===CHARCOAL) && rng()<0.5) {
-          set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; break;
+      // Almost always spread (95%), rarely just die
+      let spread = false;
+      if (rng() < 0.95) {
+        for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+          const n=get(x+dx,y+dy);
+          if ((n===WOOD||n===TRUNK||n===CHARCOAL) && rng()<0.5) {
+            set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; spread=true; break;
+          }
         }
       }
       grid[i]=CHARCOAL; fireAge[i]=0;
@@ -250,8 +253,8 @@ function simFire(x,y,i) {
       if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
     }
   } else {
-    // FREE FIRE: no fuel, dies quickly (original 15%)
-    if (rng()<0.15) { grid[i]=EMPTY; fireAge[i]=0; return; }
+    // FREE FIRE: no fuel, dies after a moment (open flame / embers rising)
+    if (rng()<0.08) { grid[i]=EMPTY; fireAge[i]=0; return; }
   }
 
   // General interactions
