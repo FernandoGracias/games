@@ -212,73 +212,54 @@ function simFire(x,y,i) {
   fireAge[i]++;
   const age = fireAge[i];
 
-  // Determine what's fueling this fire
-  let nearOil = false, nearWood = false;
+  // Check what's around
+  let nearOil=false, nearWood=false;
   for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-    const n = get(x+dx,y+dy);
+    const n=get(x+dx,y+dy);
     if (n===OIL) nearOil=true;
     if (n===WOOD||n===TRUNK||n===CHARCOAL) nearWood=true;
   }
 
-  if (nearWood) {
-    // WOOD FIRE: burns in place for a long time (~600 frames / 10 sec)
-    // Chars adjacent wood while burning
-    if (rng() < 0.06) {
-      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-        const n=get(x+dx,y+dy);
-        if ((n===WOOD||n===TRUNK) && rng()<0.5) { set(x+dx,y+dy,CHARCOAL); break; }
-      }
-    }
-    // After burn time, spread and become charcoal
-    if (age > 400 + (rng()*400|0)) {
-      // Try to spread — keep trying all neighbors until one works
-      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-        const n=get(x+dx,y+dy);
-        if (n===WOOD||n===TRUNK||n===CHARCOAL) {
-          set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0;
-          grid[i]=CHARCOAL; fireAge[i]=0;
-          return;
-        }
-      }
-      // No wood to spread to — just become charcoal
-      grid[i]=CHARCOAL; fireAge[i]=0;
-      return;
-    }
-    // Never goes out while fuel is present
-  } else if (nearOil) {
-    // OIL FIRE: never goes out, spreads at 30%
+  // Water extinguishes
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+    if (get(x+dx,y+dy)===WATER) { grid[i]=STEAM; fireAge[i]=0; return; }
+  }
+  // Powder explodes
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+    if (get(x+dx,y+dy)===POWDER && rng()<0.8) { explode(x+dx,y+dy); fireAge[i]=0; return; }
+  }
+
+  // Die logic
+  if (nearOil) {
+    // Never dies near oil
+  } else if (nearWood) {
+    // Burns a long time on wood, then becomes charcoal
+    if (age > 600) { grid[i]=CHARCOAL; fireAge[i]=0; return; }
+  } else {
+    // Free fire — open flame, lasts a while
+    if (rng()<0.04) { grid[i]=EMPTY; fireAge[i]=0; return; }
+  }
+
+  // Spread to flammables
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+    if (!dx&&!dy) continue;
+    const n=get(x+dx,y+dy);
+    if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
+    else if ((n===WOOD||n===TRUNK) && rng()<0.01) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
+    else if (n===CHARCOAL && rng()<0.03) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
+    else if ((n===GRASS||n===VINE||n===LEAF||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE) && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
+  }
+
+  // Char adjacent wood
+  if (nearWood && rng()<0.04) {
     for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
       const n=get(x+dx,y+dy);
-      if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
-    }
-  } else {
-    // FREE FIRE (open flame / rising embers): try to jump to wood before dying
-    if (rng()<0.04) {
-      // Before dying, try to spread to any nearby flammable
-      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-        const n=get(x+dx,y+dy);
-        if (n===WOOD||n===TRUNK||n===OIL||n===GRASS||n===VINE||n===LEAF) {
-          set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0;
-          grid[i]=EMPTY; fireAge[i]=0;
-          return;
-        }
-      }
-      grid[i]=EMPTY; fireAge[i]=0; return;
+      if ((n===WOOD||n===TRUNK) && rng()<0.3) set(x+dx,y+dy,CHARCOAL);
     }
   }
 
-  // General interactions
-  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-    const n=get(x+dx,y+dy);
-    if (n===WATER) { grid[i]=STEAM; fireAge[i]=0; return; }
-    if (n===POWDER && rng()<0.8) { explode(x+dx,y+dy); fireAge[i]=0; return; }
-    // Non-wood/oil flammables burn normally
-    if (!nearWood && !nearOil && (n===GRASS||n===VINE||n===LEAF||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE) && rng()<0.3) {
-      set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0;
-    }
-  }
-  // Fire rises
-  if (y>0 && grid[i-W]===EMPTY && rng()<0.4) { swap(i, i-W); fireAge[i-W]=age; fireAge[i]=0; }
+  // Fire rises — produces open flame above
+  if (y>0 && grid[i-W]===EMPTY && rng()<0.5) { grid[i-W]=FIRE; fireAge[i-W]=0; }
 }
 
 function explode(cx, cy) {
