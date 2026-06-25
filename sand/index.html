@@ -45,7 +45,7 @@ const ctx = canvas.getContext('2d');
 const cursorEl = document.getElementById('cursor');
 
 const SCALE = 3;
-let W, H, grid, sources, updated;
+let W, H, grid, sources, updated, prevGrid;
 
 function resize() {
   const rect = canvas.getBoundingClientRect();
@@ -56,6 +56,8 @@ function resize() {
   grid = new Uint8Array(W * H);
   sources = new Uint8Array(W * H);
   updated = new Uint8Array(W * H);
+  prevGrid = new Uint8Array(W * H);
+  prevGrid.fill(255); // Force full redraw on first frame
 }
 resize();
 window.addEventListener('resize', () => { resize(); });
@@ -167,7 +169,7 @@ function simulate() {
       const ci = idx(x, y);
       if (updated[ci]) continue;
       const type = grid[ci];
-      if (type === EMPTY) continue;
+      if (type === EMPTY || type === STONE || type === WOOD || type === TRUNK || type === LEAF || type === FLOWER || type === ROOT) continue;
 
       switch(type) {
         case SAND: updateSand(x, y); break;
@@ -709,16 +711,26 @@ const imgData = ctx.createImageData(canvas.width, canvas.height);
 
 function render() {
   const data = imgData.data;
-  data.fill(0);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const i = idx(x, y);
+      const i = y * W + x;
+      // Skip cells that haven't changed
+      if (grid[i] === prevGrid[i]) continue;
+      prevGrid[i] = grid[i];
+
       const type = grid[i];
-      if (type === EMPTY && !sources[i]) continue;
       let r, g, b;
-      if (type !== EMPTY) { [r, g, b] = getColor(type); }
-      else { [r, g, b] = getColor(sources[i]); }
-      if (sources[i]) { r = Math.min(255, r + 40); g = Math.min(255, g + 40); b = Math.min(255, b + 40); }
+      if (type === EMPTY) {
+        if (sources[i]) {
+          [r, g, b] = getColor(sources[i]);
+          r = Math.min(255, r + 40); g = Math.min(255, g + 40); b = Math.min(255, b + 40);
+        } else {
+          r = 0; g = 0; b = 0;
+        }
+      } else {
+        [r, g, b] = getColor(type);
+        if (sources[i]) { r = Math.min(255, r + 40); g = Math.min(255, g + 40); b = Math.min(255, b + 40); }
+      }
       for (let sy = 0; sy < SCALE; sy++) {
         for (let sx = 0; sx < SCALE; sx++) {
           const pi = ((y * SCALE + sy) * canvas.width + (x * SCALE + sx)) * 4;
