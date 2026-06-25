@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Games</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; padding: 40px 20px; }
+h1 { text-align: center; margin-bottom: 40px; font-size: 2em; }
+.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; max-width: 800px; margin: 0 auto; }
+.game-card { background: #16213e; border-radius: 12px; padding: 24px; text-align: center; text-decoration: none; color: #eee; transition: transform 0.2s, box-shadow 0.2s; }
+.game-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.game-card .icon { font-size: 3em; margin-bottom: 12px; }
+.game-card .name { font-size: 1.1em; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Games</h1>
+<div class="games">
+  <a href="drawing/" class="game-card">
+    <div class="icon">🎨</div>
+    <div class="name">Drawing App</div>
+  </a>
+</div>
+</body>
+</html>

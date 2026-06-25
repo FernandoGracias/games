@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drawing App</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #f0f0f0; }
+.toolbar { display: flex; gap: 8px; padding: 8px; background: #fff; border-bottom: 1px solid #ddd; align-items: center; flex-wrap: wrap; }
+.toolbar label { font-size: 13px; }
+.color-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; }
+.color-btn.active { border-color: #333; box-shadow: 0 0 4px rgba(0,0,0,0.4); }
+canvas { flex: 1; cursor: crosshair; background: #fff; }
+button { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; }
+button:hover { background: #eee; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button id="clearBtn">Clear</button>
+  <label>Size: <input type="range" id="size" min="1" max="40" value="4"></label>
+  <div id="colors" style="display:flex;gap:4px;"></div>
+  <button id="eraserBtn">Eraser</button>
+</div>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const colors = ["#000","#e74c3c","#e67e22","#f1c40f","#2ecc71","#3498db","#9b59b6","#e91e63","#fff"];
+let currentColor = "#000";
+let drawing = false;
+let eraser = false;
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+}
+resize();
+window.addEventListener("resize", resize);
+
+const colorsDiv = document.getElementById("colors");
+colors.forEach(c => {
+  const btn = document.createElement("div");
+  btn.className = "color-btn" + (c === currentColor ? " active" : "");
+  btn.style.background = c;
+  if (c === "#fff") btn.style.border = "2px solid #aaa";
+  btn.onclick = () => {
+    eraser = false;
+    document.getElementById("eraserBtn").style.background = "#fff";
+    currentColor = c;
+    document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+  };
+  colorsDiv.appendChild(btn);
+});
+
+document.getElementById("clearBtn").onclick = () => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+};
+
+document.getElementById("eraserBtn").onclick = () => {
+  eraser = !eraser;
+  document.getElementById("eraserBtn").style.background = eraser ? "#ddd" : "#fff";
+};
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+
+function startDraw(e) {
+  drawing = true;
+  const pos = getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+}
+
+function draw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const pos = getPos(e);
+  const size = document.getElementById("size").value;
+  ctx.lineWidth = size;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (eraser) {
+    ctx.globalCompositeOperation = "destination-out";
+  } else {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.strokeStyle = currentColor;
+  }
+  ctx.lineTo(pos.x, pos.y);
+  ctx.stroke();
+}
+
+function stopDraw() {
+  drawing = false;
+  ctx.beginPath();
+}
+
+canvas.addEventListener("mousedown", startDraw);
+canvas.addEventListener("mousemove", draw);
+canvas.addEventListener("mouseup", stopDraw);
+canvas.addEventListener("mouseleave", stopDraw);
+canvas.addEventListener("touchstart", startDraw, {passive: false});
+canvas.addEventListener("touchmove", draw, {passive: false});
+canvas.addEventListener("touchend", stopDraw);
+</script>
+</body>
+</html>
