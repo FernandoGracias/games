@@ -304,7 +304,7 @@ function updateSapling(x, y) {
   }
 
   // Growth slows as tree gets taller — never stops entirely
-  const growChance = 0.05 / (1 + height * 0.3);
+  const growChance = Math.max(0.01, 0.06 / (1 + height * 0.08));
   if (Math.random() > growChance) return;
 
   // Need water/wet soil nearby to grow
@@ -355,11 +355,18 @@ function updateSapling(x, y) {
 function updateGrass(x, y) {
   if (Math.random() > 0.08) return;
 
-  // Water passes through grass — let it fall
+  // Water passes through grass — move it below or to the side
   if (get(x, y - 1) === WATER) {
-    // Swap water down through the grass
-    swap(x, y, x, y - 1);
-    updated[idx(x, y - 1)] = 1;
+    if (isEmpty(x, y + 1)) {
+      set(x, y + 1, WATER);
+      set(x, y - 1, EMPTY);
+    } else if (isEmpty(x - 1, y)) {
+      set(x - 1, y, WATER);
+      set(x, y - 1, EMPTY);
+    } else if (isEmpty(x + 1, y)) {
+      set(x + 1, y, WATER);
+      set(x, y - 1, EMPTY);
+    }
     return;
   }
 
@@ -405,10 +412,18 @@ function updateGrass(x, y) {
 // Vine grows aggressively in all directions when water nearby
 // Vine: single-pixel strings that climb upward, occasionally branch
 function updateVine(x, y) {
-  // Water passes through vine
+  // Water passes through vine — move water below if possible
   if (get(x, y - 1) === WATER) {
-    swap(x, y, x, y - 1);
-    updated[idx(x, y - 1)] = 1;
+    if (isEmpty(x, y + 1)) {
+      set(x, y + 1, WATER);
+      set(x, y - 1, EMPTY);
+    } else if (isEmpty(x - 1, y)) {
+      set(x - 1, y, WATER);
+      set(x, y - 1, EMPTY);
+    } else if (isEmpty(x + 1, y)) {
+      set(x + 1, y, WATER);
+      set(x, y - 1, EMPTY);
+    }
     return;
   }
 
