@@ -125,26 +125,20 @@ function simulate() {
 
     const sx = i % W, sy = (i / W) | 0;
 
-    // What can this liquid pass through when welling up?
-    // Water: empty, water, sand, salt, soil, wet soil
-    // Oil: empty, oil, water, sand, salt, soil, wet soil
-    // Stopped by: stone, wood, trunk, leaf, grass, vine, flower, etc.
-    function canWellThrough(cell) {
-      if (cell === EMPTY) return true;
-      if (cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL) return true;
-      if (srcType === WATER && cell === WATER) return true;
-      if (srcType === OIL && (cell === OIL || cell === WATER)) return true;
-      return false;
-    }
-
-    // Scan up, place at first empty cell reachable through passable layers
+    // Scan up through same-type liquid to find the surface, place one cell above it
     for (let dy = 1; dy <= sy; dy++) {
       const cell = grid[idx(sx, sy - dy)];
       if (cell === EMPTY) {
+        // Found the surface — place here (one above the liquid)
         grid[idx(sx, sy - dy)] = srcType;
         break;
       }
-      if (!canWellThrough(cell)) break;
+      // Can pass through own liquid type, sand, salt, soil
+      if (cell === srcType) continue;
+      if (cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL) continue;
+      if (srcType === OIL && cell === WATER) continue;
+      // Hit an impermeable barrier — stop
+      break;
     }
   }
 
