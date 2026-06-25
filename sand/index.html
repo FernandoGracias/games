@@ -156,8 +156,8 @@ function simulate() {
         case SAPLING: simSapling(x, y, i); break;
         case APPLE: simApple(x, y, i); break;
         case POWDER: fall(x, y, i, true); break;
-        case CHARCOAL: if(rng()<0.01) grid[i]=EMBER; break;
-        case EMBER: if(rng()<0.0005) grid[i]=EMPTY; break;
+        case CHARCOAL: if(rng()<0.01) { grid[i]=EMBER; fireAge[i]=0; } break;
+        case EMBER: fireAge[i]++; if(fireAge[i] > 300 + ((i*7)%420)) grid[i]=EMPTY; break;
       }
     }
   }
