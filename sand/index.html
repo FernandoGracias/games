@@ -426,13 +426,15 @@ function updateVine(x, y) {
 
 // Soil: falls like sand, absorbs water on contact
 function updateSoil(x, y) {
-  // Check for adjacent water — absorb it
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER) {
-        set(x + dx, y + dy, EMPTY);
-        set(x, y, WET_SOIL);
-        return;
+  // Check for adjacent water — absorb it (slowly)
+  if (Math.random() < 0.1) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (get(x + dx, y + dy) === WATER) {
+          set(x + dx, y + dy, EMPTY);
+          set(x, y, WET_SOIL);
+          return;
+        }
       }
     }
   }
@@ -441,7 +443,7 @@ function updateSoil(x, y) {
 
 // Wet soil: passes moisture downward to dry soil, triggers seeds to sprout with roots
 function updateWetSoil(x, y) {
-  if (Math.random() > 0.3) return;
+  if (Math.random() > 0.05) return;
   // Check for adjacent seeds — sprout them with roots growing down
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
