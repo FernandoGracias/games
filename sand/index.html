@@ -30,6 +30,7 @@ canvas { flex: 1; image-rendering: pixelated; }
   <button class="btn" data-el="wood">Wood</button>
   <button class="btn" data-el="stone">Stone</button>
   <button class="btn" data-el="salt">Salt</button>
+  <button class="btn" data-el="soil">Soil</button>
   <button class="btn" data-el="eraser">Eraser</button>
   <span class="size-label">Size: <input type="range" id="brushSize" min="0" max="12" value="3" style="vertical-align:middle;width:60px;"></span>
   <label class="source-label"><input type="checkbox" id="sourceMode"> Source</label>
@@ -62,6 +63,7 @@ window.addEventListener('resize', () => { resize(); });
 const EMPTY = 0, SAND = 1, WATER = 2, FIRE = 3, OIL = 4, WOOD = 5, STONE = 6, SALT = 7, STEAM = 8;
 const GRASS_SEED = 9, VINE_SEED = 10, TREE_SEED = 11;
 const GRASS = 12, VINE = 13, TRUNK = 14, LEAF = 15, FLOWER = 16;
+const SOIL = 17, WET_SOIL = 18, ROOT = 19;
 
 function getColor(type) {
   switch(type) {
@@ -81,11 +83,14 @@ function getColor(type) {
     case TRUNK: return [80, 55, 20];
     case LEAF: return [20, 150, 30];
     case FLOWER: return [220, 80, 160];
+    case SOIL: return [90, 60, 30];
+    case WET_SOIL: return [55, 35, 15];
+    case ROOT: return [140, 100, 50];
     default: return [0, 0, 0];
   }
 }
 
-function isFlammable(t) { return t === GRASS || t === VINE || t === WOOD || t === OIL || t === LEAF || t === TRUNK || t === FLOWER || t === GRASS_SEED || t === VINE_SEED || t === TREE_SEED; }
+function isFlammable(t) { return t === GRASS || t === VINE || t === WOOD || t === OIL || t === LEAF || t === TRUNK || t === FLOWER || t === GRASS_SEED || t === VINE_SEED || t === TREE_SEED || t === ROOT; }
 
 function idx(x, y) { return y * W + x; }
 function inBounds(x, y) { return x >= 0 && x < W && y >= 0 && y < H; }
@@ -154,6 +159,8 @@ function simulate() {
         case TREE_SEED: updateTreeSeed(x, y); break;
         case GRASS: updateGrass(x, y); break;
         case VINE: updateVine(x, y); break;
+        case SOIL: updateSoil(x, y); break;
+        case WET_SOIL: updateWetSoil(x, y); break;
       }
     }
   }
@@ -207,27 +214,45 @@ function updateOil(x, y) {
 
 // Seeds fall like sand (less dense) then sprout when wet
 function updateGrassSeed(x, y) {
-  // Check for water contact
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER) {
-        // Sprout! Consume the water, become grass
+      const n = get(x + dx, y + dy);
+      if (n === WATER) {
         set(x + dx, y + dy, EMPTY);
         set(x, y, GRASS);
         return;
       }
+      if (n === WET_SOIL) {
+        set(x, y, GRASS);
+        // Grow roots down
+        let ry = y + 1;
+        for (let r = 0; r < 4; r++) {
+          const rx = x + (Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) : 0);
+          if (inBounds(rx, ry) && (get(rx, ry) === SOIL || get(rx, ry) === WET_SOIL || isEmpty(rx, ry))) set(rx, ry, ROOT);
+          else break;
+          ry++;
+        }
+        return;
+      }
     }
   }
-  // Fall like sand but less densely dispensed
   fall(x, y, true);
 }
 
 function updateVineSeed(x, y) {
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER) {
-        set(x + dx, y + dy, EMPTY);
+      const n = get(x + dx, y + dy);
+      if (n === WATER) { set(x + dx, y + dy, EMPTY); set(x, y, VINE); return; }
+      if (n === WET_SOIL) {
         set(x, y, VINE);
+        let ry = y + 1;
+        for (let r = 0; r < 4; r++) {
+          const rx = x + (Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) : 0);
+          if (inBounds(rx, ry) && (get(rx, ry) === SOIL || get(rx, ry) === WET_SOIL || isEmpty(rx, ry))) set(rx, ry, ROOT);
+          else break;
+          ry++;
+        }
         return;
       }
     }
@@ -238,13 +263,21 @@ function updateVineSeed(x, y) {
 function updateTreeSeed(x, y) {
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER) {
-        set(x + dx, y + dy, EMPTY);
+      const n = get(x + dx, y + dy);
+      if (n === WATER || n === WET_SOIL) {
+        if (n === WATER) set(x + dx, y + dy, EMPTY);
         set(x, y, TRUNK);
-        // Grow a small trunk upward immediately
         for (let h = 1; h <= 3; h++) {
           if (isEmpty(x, y - h)) set(x, y - h, TRUNK);
           else break;
+        }
+        // Grow roots
+        let ry = y + 1;
+        for (let r = 0; r < 6; r++) {
+          const rx = x + (Math.random() < 0.4 ? (Math.random() < 0.5 ? -1 : 1) : 0);
+          if (inBounds(rx, ry) && (get(rx, ry) === SOIL || get(rx, ry) === WET_SOIL || isEmpty(rx, ry))) set(rx, ry, ROOT);
+          else break;
+          ry++;
         }
         return;
       }
@@ -298,6 +331,64 @@ function updateVine(x, y) {
   }
 }
 
+// Soil: falls like sand, absorbs water on contact
+function updateSoil(x, y) {
+  // Check for adjacent water — absorb it
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (get(x + dx, y + dy) === WATER) {
+        set(x + dx, y + dy, EMPTY);
+        set(x, y, WET_SOIL);
+        updated[idx(x, y)] = 1;
+        return;
+      }
+    }
+  }
+  fall(x, y, true);
+}
+
+// Wet soil: passes moisture downward to dry soil, triggers seeds to sprout with roots
+function updateWetSoil(x, y) {
+  // Check for adjacent seeds — sprout them with roots growing down
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const n = get(x + dx, y + dy);
+      if (n === GRASS_SEED || n === VINE_SEED || n === TREE_SEED) {
+        // Sprout the seed upward
+        if (n === GRASS_SEED) set(x + dx, y + dy, GRASS);
+        else if (n === VINE_SEED) set(x + dx, y + dy, VINE);
+        else {
+          set(x + dx, y + dy, TRUNK);
+          for (let h = 1; h <= 3; h++) {
+            if (isEmpty(x + dx, y + dy - h)) set(x + dx, y + dy - h, TRUNK);
+            else break;
+          }
+        }
+        // Grow roots downward from the wet soil
+        let ry = y + 1;
+        for (let r = 0; r < 5; r++) {
+          const rx = x + (Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) : 0);
+          if (inBounds(rx, ry) && (get(rx, ry) === SOIL || get(rx, ry) === WET_SOIL || isEmpty(rx, ry))) {
+            set(rx, ry, ROOT);
+          } else break;
+          ry++;
+        }
+        // Wet soil becomes regular soil after triggering
+        set(x, y, SOIL);
+        return;
+      }
+    }
+  }
+  // Pass moisture downward — if dry soil below, make it wet
+  if (get(x, y + 1) === SOIL && Math.random() < 0.3) {
+    set(x, y + 1, WET_SOIL);
+    set(x, y, SOIL);
+    updated[idx(x, y + 1)] = 1;
+    return;
+  }
+  // Wet soil doesn't fall — it stays in place (sticky)
+}
+
 function updateFire(x, y) {
   let nearWood = false;
   for (let dx = -1; dx <= 1; dx++)
@@ -343,7 +434,7 @@ let resizeStartSize = 0;
 let currentElement = SAND;
 let lastPaintX = -1, lastPaintY = -1;
 let lastRawX = -1, lastRawY = -1;
-const elementMap = { sand: SAND, water: WATER, grass_seed: GRASS_SEED, vine_seed: VINE_SEED, tree_seed: TREE_SEED, fire: FIRE, oil: OIL, wood: WOOD, stone: STONE, salt: SALT, eraser: EMPTY };
+const elementMap = { sand: SAND, water: WATER, grass_seed: GRASS_SEED, vine_seed: VINE_SEED, tree_seed: TREE_SEED, fire: FIRE, oil: OIL, wood: WOOD, stone: STONE, salt: SALT, soil: SOIL, eraser: EMPTY };
 
 document.querySelectorAll('.btn[data-el]').forEach(btn => {
   btn.addEventListener('click', () => {
