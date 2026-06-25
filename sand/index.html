@@ -118,8 +118,8 @@ function simulate() {
     const srcType = sources[i];
     if (grid[i] === EMPTY) {
       grid[i] = srcType;
-    } else if (grid[i] === srcType) {
-      // Well: find the top of the contiguous column of same type above, place there
+    } else if (grid[i] === srcType || (srcType === OIL && (grid[i] === SAND || grid[i] === WATER || grid[i] === SOIL || grid[i] === WET_SOIL || grid[i] === SALT))) {
+      // Well: find the top of passable column above, place there
       const sx = i % W, sy = (i / W) | 0;
       for (let dy = 1; dy <= sy; dy++) {
         const above = grid[idx(sx, sy - dy)];
@@ -127,7 +127,10 @@ function simulate() {
           grid[idx(sx, sy - dy)] = srcType;
           break;
         }
-        if (above !== srcType) break; // Stop at anything that isn't our type
+        // Oil pushes through sand, water, soil, salt, and itself
+        if (srcType === OIL && (above === SAND || above === WATER || above === SOIL || above === WET_SOIL || above === SALT || above === OIL)) continue;
+        // Others only push through their own type
+        if (above !== srcType) break;
       }
     }
   }
