@@ -112,33 +112,44 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources emit — liquids well up, filling containers and overflowing
+  // Sources emit
   for (let i = 0; i < sources.length; i++) {
     if (!sources[i]) continue;
     const srcType = sources[i];
+    // Emit into own cell when empty
     if (grid[i] === EMPTY) {
       grid[i] = srcType;
       continue;
     }
-    // Only water and oil well
+    // Only water/oil well up, and ONLY when fully submerged
     if (srcType !== WATER && srcType !== OIL) continue;
+    if (grid[i] !== srcType) continue;
 
     const sx = i % W, sy = (i / W) | 0;
 
-    // Scan up through same-type liquid to find the surface, place one cell above it
-    for (let dy = 1; dy <= sy; dy++) {
-      const cell = grid[idx(sx, sy - dy)];
-      if (cell === EMPTY) {
-        // Found the surface — place here (one above the liquid)
-        grid[idx(sx, sy - dy)] = srcType;
-        break;
+    // Check: is there ANY empty space below or at same level nearby?
+    // If so, don't well — the liquid should flow there via normal physics
+    let canFlowDown = false;
+    if (sy + 1 < H && grid[idx(sx, sy + 1)] === EMPTY) canFlowDown = true;
+    if (sx > 0 && grid[idx(sx - 1, sy)] === EMPTY) canFlowDown = true;
+    if (sx < W - 1 && grid[idx(sx + 1, sy)] === EMPTY) canFlowDown = true;
+    if (sy + 1 < H && sx > 0 && grid[idx(sx - 1, sy + 1)] === EMPTY) canFlowDown = true;
+    if (sy + 1 < H && sx < W - 1 && grid[idx(sx + 1, sy + 1)] === EMPTY) canFlowDown = true;
+    if (canFlowDown) continue;
+
+    // Fully submerged — well up: place one cell above the liquid surface
+    if (sy > 0 && grid[idx(sx, sy - 1)] === EMPTY) {
+      grid[idx(sx, sy - 1)] = srcType;
+    } else if (sy > 0 && grid[idx(sx, sy - 1)] === srcType) {
+      // Find top of liquid column
+      for (let dy = 2; dy <= sy; dy++) {
+        const cell = grid[idx(sx, sy - dy)];
+        if (cell === EMPTY) {
+          grid[idx(sx, sy - dy)] = srcType;
+          break;
+        }
+        if (cell !== srcType) break; // hit a wall, stop
       }
-      // Can pass through own liquid type, sand, salt, soil
-      if (cell === srcType) continue;
-      if (cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL) continue;
-      if (srcType === OIL && cell === WATER) continue;
-      // Hit an impermeable barrier — stop
-      break;
     }
   }
 
