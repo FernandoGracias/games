@@ -52,8 +52,8 @@ function resize() {
   canvas.height = rect.height;
   W = Math.floor(canvas.width / SCALE);
   H = Math.floor(canvas.height / SCALE);
-  grid = new Array(W * H).fill(0);
-  sources = new Array(W * H).fill(0);
+  grid = new Uint8Array(W * H);
+  sources = new Uint8Array(W * H);
   updated = new Uint8Array(W * H);
 }
 resize();
@@ -192,13 +192,6 @@ function flowSide(x, y, spread) {
   return false;
 }
 
-function hasWaterNear(x, y, radius) {
-  for (let dx = -radius; dx <= radius; dx++)
-    for (let dy = -radius; dy <= radius; dy++)
-      if (get(x + dx, y + dy) === WATER) return true;
-  return false;
-}
-
 function updateSand(x, y) { fall(x, y, true); }
 function updateSalt(x, y) {
   for (let dx = -1; dx <= 1; dx++)
@@ -288,45 +281,49 @@ function updateTreeSeed(x, y) {
 
 // Grown grass is static, occasionally flowers, grows more when watered
 function updateGrass(x, y) {
-  // Grow sideways/up when water nearby
-  if (Math.random() < 0.08 && hasWaterNear(x, y, 2)) {
-    const dirs = [[-1,0],[1,0],[0,-1],[-1,-1],[1,-1]];
-    const [dx, dy] = dirs[Math.random() * dirs.length | 0];
-    if (isEmpty(x + dx, y + dy)) {
-      set(x + dx, y + dy, GRASS);
-      updated[idx(x + dx, y + dy)] = 1;
-    }
-  }
+  if (Math.random() > 0.1) return; // Only process 10% of grass per frame
   // Consume adjacent water to grow
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER && Math.random() < 0.05) {
+      const n = get(x + dx, y + dy);
+      if (n === WATER && Math.random() < 0.5) {
         set(x + dx, y + dy, GRASS);
         updated[idx(x + dx, y + dy)] = 1;
+        return;
       }
     }
   }
   // Occasional wildflower
-  if (Math.random() < 0.001 && isEmpty(x, y - 1)) {
+  if (Math.random() < 0.01 && isEmpty(x, y - 1)) {
     set(x, y - 1, FLOWER);
   }
 }
 
 // Vine grows aggressively in all directions when water nearby
 function updateVine(x, y) {
-  if (Math.random() < 0.15 && hasWaterNear(x, y, 4)) {
-    const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-    const [dx, dy] = dirs[Math.random() * dirs.length | 0];
-    const nx = x + dx, ny = y + dy;
-    if (isEmpty(nx, ny)) { set(nx, ny, VINE); updated[idx(nx, ny)] = 1; }
-  }
-  // Consume adjacent water
+  if (Math.random() > 0.1) return; // Only process 10% per frame
+  // Check immediate neighbors for water — consume and grow
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER && Math.random() < 0.1) {
+      if (get(x + dx, y + dy) === WATER && Math.random() < 0.5) {
         set(x + dx, y + dy, VINE);
         updated[idx(x + dx, y + dy)] = 1;
+        return;
       }
+    }
+  }
+  // Grow into empty space if water within 2 cells
+  if (Math.random() < 0.3) {
+    let hasWater = false;
+    outer: for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        if (get(x + dx, y + dy) === WATER) { hasWater = true; break outer; }
+      }
+    }
+    if (hasWater) {
+      const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+      const [dx, dy] = dirs[Math.random() * dirs.length | 0];
+      if (isEmpty(x + dx, y + dy)) { set(x + dx, y + dy, VINE); updated[idx(x + dx, y + dy)] = 1; }
     }
   }
 }
@@ -349,6 +346,7 @@ function updateSoil(x, y) {
 
 // Wet soil: passes moisture downward to dry soil, triggers seeds to sprout with roots
 function updateWetSoil(x, y) {
+  if (Math.random() > 0.2) return; // Only process 20% per frame
   // Check for adjacent seeds — sprout them with roots growing down
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
@@ -565,7 +563,7 @@ function loop() {
     const rect = canvas.getBoundingClientRect();
     paintAt((lastRawX - rect.left) / SCALE | 0, (lastRawY - rect.top) / SCALE | 0);
   }
-  simulate(); simulate(); simulate(); simulate();
+  simulate(); simulate();
   render();
   requestAnimationFrame(loop);
 }
