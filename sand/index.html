@@ -207,7 +207,7 @@ function simFire(x,y,i) {
     const n = get(x+dx,y+dy);
     if (n===WATER) { grid[i]=STEAM; return; }
     const flam = n===GRASS||n===VINE||n===WOOD||n===OIL||n===LEAF||n===TRUNK||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE;
-    if (flam && rng() < (n===WOOD||n===TRUNK ? 0.03 : n===OIL ? 0.5 : 0.3)) {
+    if (flam && rng() < (n===WOOD||n===TRUNK ? 0.03 : n===OIL ? 0.08 : 0.3)) {
       set(x+dx,y+dy,FIRE);
     }
   }
