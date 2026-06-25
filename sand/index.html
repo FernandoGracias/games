@@ -113,47 +113,53 @@ function simulate() {
   updated.fill(0);
 
   // Sources emit with pressure physics (BFS to find nearest empty reachable through liquid)
-  for (let i = 0; i < sources.length; i++) {
-    if (!sources[i]) continue;
-    const srcType = sources[i];
-    if (grid[i] === EMPTY) {
-      grid[i] = srcType;
-      continue;
-    }
-    // Only water/oil have pressure
-    if (srcType !== WATER && srcType !== OIL) continue;
-    if (grid[i] !== srcType) continue;
-
-    // BFS: find nearest empty cell reachable through connected same-type liquid
-    const sx = i % W, sy = (i / W) | 0;
-    const visited = new Uint8Array(W * H);
-    const queue = [[sx, sy]];
-    visited[i] = 1;
-    let found = false;
-    let steps = 0;
-    const maxSteps = 2000; // cap search to avoid perf issues
-
-    while (queue.length > 0 && steps < maxSteps) {
-      steps++;
-      const [cx, cy] = queue.shift();
-      // Check neighbors: down first, then sides, then up (priority order)
-      const neighbors = [[cx, cy+1], [cx-1, cy], [cx+1, cy], [cx, cy-1]];
-      for (const [nx, ny] of neighbors) {
-        if (!inBounds(nx, ny)) continue;
-        const ni = idx(nx, ny);
-        if (visited[ni]) continue;
-        visited[ni] = 1;
-        const cell = grid[ni];
-        if (cell === EMPTY) {
-          grid[ni] = srcType;
-          found = true;
-          break;
-        }
-        if (cell === srcType) queue.push([nx, ny]);
-        // Oil can also path through water
-        if (srcType === OIL && cell === WATER) queue.push([nx, ny]);
+  // Throttled: only run BFS every 6 frames to save perf
+  if (tick % 6 === 0) {
+    for (let i = 0; i < sources.length; i++) {
+      if (!sources[i]) continue;
+      const srcType = sources[i];
+      if (grid[i] === EMPTY) {
+        grid[i] = srcType;
+        continue;
       }
-      if (found) break;
+      // Only water/oil have pressure
+      if (srcType !== WATER && srcType !== OIL) continue;
+      if (grid[i] !== srcType) continue;
+
+      // BFS: find nearest empty cell reachable through connected same-type liquid
+      const sx = i % W, sy = (i / W) | 0;
+      const visited = new Uint8Array(W * H);
+      const queue = [[sx, sy]];
+      visited[i] = 1;
+      let found = false;
+      let steps = 0;
+      const maxSteps = 2000;
+
+      while (queue.length > 0 && steps < maxSteps) {
+        steps++;
+        const [cx, cy] = queue.shift();
+        const neighbors = [[cx, cy+1], [cx-1, cy], [cx+1, cy], [cx, cy-1]];
+        for (const [nx, ny] of neighbors) {
+          if (!inBounds(nx, ny)) continue;
+          const ni = idx(nx, ny);
+          if (visited[ni]) continue;
+          visited[ni] = 1;
+          const cell = grid[ni];
+          if (cell === EMPTY) {
+            grid[ni] = srcType;
+            found = true;
+            break;
+          }
+          if (cell === srcType) queue.push([nx, ny]);
+          if (srcType === OIL && cell === WATER) queue.push([nx, ny]);
+        }
+        if (found) break;
+      }
+    }
+  } else {
+    // Non-BFS frames: just emit into own cell if empty
+    for (let i = 0; i < sources.length; i++) {
+      if (sources[i] && grid[i] === EMPTY) grid[i] = sources[i];
     }
   }
 
