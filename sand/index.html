@@ -63,7 +63,7 @@ window.addEventListener('resize', () => { resize(); });
 const EMPTY = 0, SAND = 1, WATER = 2, FIRE = 3, OIL = 4, WOOD = 5, STONE = 6, SALT = 7, STEAM = 8;
 const GRASS_SEED = 9, VINE_SEED = 10, TREE_SEED = 11;
 const GRASS = 12, VINE = 13, TRUNK = 14, LEAF = 15, FLOWER = 16;
-const SOIL = 17, WET_SOIL = 18, ROOT = 19;
+const SOIL = 17, WET_SOIL = 18, ROOT = 19, SAPLING = 20, APPLE = 21;
 
 function getColor(type) {
   switch(type) {
@@ -86,11 +86,13 @@ function getColor(type) {
     case SOIL: return [90, 60, 30];
     case WET_SOIL: return [55, 35, 15];
     case ROOT: return [140, 100, 50];
+    case SAPLING: return [60, 130, 30];
+    case APPLE: return [200, 30, 30];
     default: return [0, 0, 0];
   }
 }
 
-function isFlammable(t) { return t === GRASS || t === VINE || t === WOOD || t === OIL || t === LEAF || t === TRUNK || t === FLOWER || t === GRASS_SEED || t === VINE_SEED || t === TREE_SEED || t === ROOT; }
+function isFlammable(t) { return t === GRASS || t === VINE || t === WOOD || t === OIL || t === LEAF || t === TRUNK || t === FLOWER || t === GRASS_SEED || t === VINE_SEED || t === TREE_SEED || t === ROOT || t === SAPLING || t === APPLE; }
 
 function idx(x, y) { return y * W + x; }
 function inBounds(x, y) { return x >= 0 && x < W && y >= 0 && y < H; }
@@ -161,6 +163,8 @@ function simulate() {
         case VINE: updateVine(x, y); break;
         case SOIL: updateSoil(x, y); break;
         case WET_SOIL: updateWetSoil(x, y); break;
+        case SAPLING: updateSapling(x, y); break;
+        case APPLE: updateApple(x, y); break;
       }
     }
   }
@@ -259,11 +263,7 @@ function updateTreeSeed(x, y) {
       const n = get(x + dx, y + dy);
       if (n === WATER || n === WET_SOIL) {
         if (n === WATER) set(x + dx, y + dy, EMPTY);
-        set(x, y, TRUNK);
-        for (let h = 1; h <= 3; h++) {
-          if (isEmpty(x, y - h)) set(x, y - h, TRUNK);
-          else break;
-        }
+        set(x, y, SAPLING); // Become a sapling, grows over time
         // Grow roots
         let ry = y + 1;
         for (let r = 0; r < 6; r++) {
@@ -277,6 +277,65 @@ function updateTreeSeed(x, y) {
     }
   }
   fall(x, y, true);
+}
+
+// Apple: stays in tree canopy, falls if unsupported
+function updateApple(x, y) {
+  // Check if any leaf or trunk neighbor supports it
+  let supported = false;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const n = get(x + dx, y + dy);
+      if (n === LEAF || n === TRUNK) { supported = true; break; }
+    }
+    if (supported) break;
+  }
+  if (!supported) fall(x, y, true);
+}
+
+// Sapling: grows upward gradually into a tree
+function updateSapling(x, y) {
+  if (Math.random() > 0.02) return; // Slow growth — ~1 growth event per second per sapling
+
+  // Grow trunk upward
+  if (isEmpty(x, y - 1)) {
+    set(x, y, TRUNK);
+    set(x, y - 1, SAPLING);
+    updated[idx(x, y - 1)] = 1;
+  } else {
+    // Can't grow up anymore — mature into a tree crown
+    set(x, y, TRUNK);
+
+    // Decide tree type: 50% deciduous (apple), 50% pine
+    const isPine = Math.random() < 0.5;
+
+    if (isPine) {
+      // Pine: triangular leaf shape
+      for (let layer = 0; layer < 4; layer++) {
+        const width = 4 - layer;
+        const ly = y - 1 - layer;
+        for (let lx = -width; lx <= width; lx++) {
+          if (isEmpty(x + lx, ly)) set(x + lx, ly, LEAF);
+        }
+      }
+      // Top point
+      if (isEmpty(x, y - 5)) set(x, y - 5, LEAF);
+    } else {
+      // Deciduous: round canopy with occasional apples
+      const radius = 3;
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          if (dx * dx + dy * dy <= radius * radius) {
+            const lx = x + dx, ly = y - 2 + dy;
+            if (inBounds(lx, ly) && isEmpty(lx, ly)) {
+              if (Math.random() < 0.08) set(lx, ly, APPLE);
+              else set(lx, ly, LEAF);
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 // Grown grass is static, occasionally flowers, grows more when watered
@@ -294,7 +353,7 @@ function updateGrass(x, y) {
     }
   }
   // Occasional wildflower
-  if (Math.random() < 0.01 && isEmpty(x, y - 1)) {
+  if (Math.random() < 0.002 && isEmpty(x, y - 1)) {
     set(x, y - 1, FLOWER);
   }
 }
