@@ -258,8 +258,11 @@ function simFire(x,y,i) {
     }
   }
 
-  // Fire rises — produces open flame above
-  if (y>0 && grid[i-W]===EMPTY && rng()<0.5) { grid[i-W]=FIRE; fireAge[i-W]=0; }
+  // Fire rises — open flame only when fueled, otherwise just drifts up
+  if (y>0 && grid[i-W]===EMPTY) {
+    if ((nearWood || nearOil) && rng()<0.5) { grid[i-W]=FIRE; fireAge[i-W]=0; }
+    else if (!nearWood && !nearOil && rng()<0.3) { swap(i, i-W); const tmp=fireAge[i]; fireAge[i]=fireAge[i-W]; fireAge[i-W]=tmp; }
+  }
 }
 
 function explode(cx, cy) {
