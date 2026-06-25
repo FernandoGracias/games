@@ -245,13 +245,13 @@ function simFire(x,y,i) {
     if (!dx&&!dy) continue;
     const n=get(x+dx,y+dy);
     if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
-    else if ((n===WOOD||n===TRUNK) && rng()<0.01) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
-    else if (n===CHARCOAL && rng()<0.03) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
+    else if ((n===WOOD||n===TRUNK) && rng()<0.02) { set(x+dx,y+dy,CHARCOAL); }
+    else if (n===CHARCOAL && rng()<0.02) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
     else if ((n===GRASS||n===VINE||n===LEAF||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE) && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
   }
 
-  // Char adjacent wood
-  if (nearWood && rng()<0.04) {
+  // Char adjacent wood (additional charring beyond spread)
+  if (nearWood && rng()<0.03) {
     for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
       const n=get(x+dx,y+dy);
       if ((n===WOOD||n===TRUNK) && rng()<0.3) set(x+dx,y+dy,CHARCOAL);
