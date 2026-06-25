@@ -156,13 +156,7 @@ function simulate() {
         case SAPLING: simSapling(x, y, i); break;
         case APPLE: simApple(x, y, i); break;
         case POWDER: fall(x, y, i, true); break;
-        case CHARCOAL: {
-          // Only become ember if no fire nearby (don't steal fuel from flames)
-          let nearFire=false;
-          for(let dy=-1;dy<=1&&!nearFire;dy++)for(let dx=-1;dx<=1&&!nearFire;dx++)if(get(x+dx,y+dy)===FIRE)nearFire=true;
-          if(!nearFire && rng()<0.06) grid[i]=EMBER;
-          break;
-        }
+        case CHARCOAL: if(rng()<0.01) grid[i]=EMBER; break;
         case EMBER: if(rng()<0.0005) grid[i]=EMPTY; break;
       }
     }
