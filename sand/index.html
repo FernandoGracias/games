@@ -47,7 +47,7 @@ const ctx = canvas.getContext('2d', { alpha: false });
 const cursorEl = document.getElementById('cursor');
 
 const SCALE = 3;
-let W, H, grid, sources, offscreen, octx, imgData, buf32;
+let W, H, grid, sources, fireAge, offscreen, octx, imgData, buf32;
 
 function resize() {
   const rect = canvas.getBoundingClientRect();
@@ -57,6 +57,7 @@ function resize() {
   H = Math.floor(canvas.height / SCALE);
   grid = new Uint8Array(W * H);
   sources = new Uint8Array(W * H);
+  fireAge = new Uint16Array(W * H);
   offscreen = new OffscreenCanvas(W, H);
   octx = offscreen.getContext('2d', { alpha: false });
   imgData = octx.createImageData(W, H);
@@ -208,32 +209,63 @@ function simOil(x,y,i) {
 }
 
 function simFire(x,y,i) {
-  // Die chance: never near oil, very slow near wood, normal otherwise
+  fireAge[i]++;
+  const age = fireAge[i];
+
+  // Determine what's fueling this fire
   let nearOil = false, nearWood = false;
   for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
     const n = get(x+dx,y+dy);
     if (n===OIL) nearOil=true;
     if (n===WOOD||n===TRUNK||n===CHARCOAL) nearWood=true;
   }
-  if (!nearOil) {
-    if (rng() < (nearWood ? 0.02 : 0.15)) { grid[i] = nearWood ? CHARCOAL : EMPTY; return; }
+
+  if (nearWood) {
+    // WOOD FIRE: burns in place for a long time (~600 frames / 10 sec)
+    // Chars adjacent wood slowly while burning
+    if (rng() < 0.02) {
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+        const n=get(x+dx,y+dy);
+        if ((n===WOOD||n===TRUNK) && rng()<0.3) { set(x+dx,y+dy,CHARCOAL); break; }
+      }
+    }
+    // After ~600 frames, spread and die
+    if (age > 400 + (rng()*400|0)) {
+      // Spread to one adjacent wood/charcoal then become charcoal
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+        const n=get(x+dx,y+dy);
+        if ((n===WOOD||n===TRUNK||n===CHARCOAL) && rng()<0.5) {
+          set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; break;
+        }
+      }
+      grid[i]=CHARCOAL; fireAge[i]=0;
+      return;
+    }
+    // Almost never goes out while fuel is present
+    if (rng()<0.001) { grid[i]=CHARCOAL; fireAge[i]=0; return; }
+  } else if (nearOil) {
+    // OIL FIRE: original behavior — never goes out, spreads at 30%
+    for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+      const n=get(x+dx,y+dy);
+      if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0; }
+    }
+  } else {
+    // FREE FIRE: no fuel, dies quickly (original 15%)
+    if (rng()<0.15) { grid[i]=EMPTY; fireAge[i]=0; return; }
   }
+
+  // General interactions
   for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
-    const n = get(x+dx,y+dy);
-    if (n===WATER) { grid[i]=STEAM; return; }
-    if (n===POWDER && rng()<0.8) { explode(x+dx,y+dy); return; }
-    // Oil: original spread rate (30%)
-    if (n===OIL && rng()<0.3) { set(x+dx,y+dy,FIRE); }
-    // Wood/trunk: ignites slowly, but chars heavily
-    else if ((n===WOOD||n===TRUNK) && rng()<0.01) { set(x+dx,y+dy,FIRE); }
-    else if ((n===WOOD||n===TRUNK) && rng()<0.08) { set(x+dx,y+dy,CHARCOAL); }
-    // Charcoal catches fire
-    else if (n===CHARCOAL && rng()<0.04) { set(x+dx,y+dy,FIRE); }
-    // Other flammables: normal rate
-    else if ((n===GRASS||n===VINE||n===LEAF||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE) && rng()<0.3) { set(x+dx,y+dy,FIRE); }
+    const n=get(x+dx,y+dy);
+    if (n===WATER) { grid[i]=STEAM; fireAge[i]=0; return; }
+    if (n===POWDER && rng()<0.8) { explode(x+dx,y+dy); fireAge[i]=0; return; }
+    // Non-wood/oil flammables burn normally
+    if (!nearWood && !nearOil && (n===GRASS||n===VINE||n===LEAF||n===FLOWER||n===ROOT||n===SAPLING||n===APPLE) && rng()<0.3) {
+      set(x+dx,y+dy,FIRE); fireAge[(y+dy)*W+(x+dx)]=0;
+    }
   }
   // Fire rises
-  if (y>0 && grid[i-W]===EMPTY && rng()<0.4) swap(i, i-W);
+  if (y>0 && grid[i-W]===EMPTY && rng()<0.4) { swap(i, i-W); fireAge[i-W]=age; fireAge[i]=0; }
 }
 
 function explode(cx, cy) {
