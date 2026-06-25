@@ -112,24 +112,41 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources emit — only liquids (water, oil) well up through columns
+  // Sources emit — liquids well up through heavier layers via pressure
   for (let i = 0; i < sources.length; i++) {
     if (!sources[i]) continue;
     const srcType = sources[i];
     if (grid[i] === EMPTY) {
       grid[i] = srcType;
-    } else if ((srcType === WATER || srcType === OIL) && grid[i] === srcType) {
-      // Liquid well: find top of contiguous same-type column, place there
-      const sx = i % W, sy = (i / W) | 0;
-      for (let dy = 1; dy <= sy; dy++) {
-        const above = grid[idx(sx, sy - dy)];
-        if (above === EMPTY) {
-          grid[idx(sx, sy - dy)] = srcType;
-          break;
-        }
-        if (srcType === OIL && (above === SAND || above === WATER || above === SOIL || above === WET_SOIL || above === SALT || above === OIL)) continue;
-        if (above !== srcType) break;
+      continue;
+    }
+    // Only water and oil have well behavior
+    if (srcType !== WATER && srcType !== OIL) continue;
+
+    // Check what's directly above — only well if buried under passable layers
+    const sx = i % W, sy = (i / W) | 0;
+    const above = sy > 0 ? grid[idx(sx, sy - 1)] : STONE;
+
+    // Determine what this liquid can push through (heavier materials)
+    // Water rises through: sand, salt, soil, wet soil
+    // Oil rises through: water, sand, salt, soil, wet soil, oil
+    function canPassThrough(cell) {
+      if (srcType === WATER) return cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL || cell === WATER;
+      if (srcType === OIL) return cell === WATER || cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL || cell === OIL;
+      return false;
+    }
+
+    // Only well if the cell above is a passable layer (not empty, not a wall)
+    if (!canPassThrough(above)) continue;
+
+    // Scan up through passable layers, place at first empty cell
+    for (let dy = 1; dy <= sy; dy++) {
+      const cell = grid[idx(sx, sy - dy)];
+      if (cell === EMPTY) {
+        grid[idx(sx, sy - dy)] = srcType;
+        break;
       }
+      if (!canPassThrough(cell)) break;
     }
   }
 
