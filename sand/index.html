@@ -205,9 +205,19 @@ function simWater(x,y,i) {
 }
 
 function simOil(x,y,i) {
-  // Float above water, sand, dirt, salt
-  if (y+1<H) { const b=grid[i+W]; if (b===WATER||b===SAND||b===SOIL||b===WET_SOIL||b===SALT) { swap(i, i+W); return; } }
-  if (!fall(x,y,i,false)) flowSide(x,y,i);
+  // Oil is lighter than water, sand, soil, salt — rise through them if they're above
+  if (y>0) {
+    const a=grid[i-W];
+    if (a===WATER||a===SAND||a===SOIL||a===WET_SOIL||a===SALT) { swap(i, i-W); return; }
+  }
+  // Fall into empty space
+  if (y+1<H && grid[i+W]===EMPTY) { swap(i, i+W); return; }
+  // Diagonal fall into empty
+  const d = rng()<0.5?1:-1;
+  if (y+1<H && x+d>=0 && x+d<W && grid[i+W+d]===EMPTY) { swap(i, i+W+d); return; }
+  if (y+1<H && x-d>=0 && x-d<W && grid[i+W-d]===EMPTY) { swap(i, i+W-d); return; }
+  // Flow sideways into empty
+  flowSide(x,y,i);
 }
 
 function simFire(x,y,i) {
