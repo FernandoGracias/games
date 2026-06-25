@@ -112,10 +112,24 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources emit into their cell when empty
+  // Sources emit — wells push up through their own liquid column
   for (let i = 0; i < sources.length; i++) {
     if (!sources[i]) continue;
-    if (grid[i] === EMPTY) grid[i] = sources[i];
+    const srcType = sources[i];
+    if (grid[i] === EMPTY) {
+      grid[i] = srcType;
+    } else if (grid[i] === srcType) {
+      // Well: find the top of the contiguous column of same type above, place there
+      const sx = i % W, sy = (i / W) | 0;
+      for (let dy = 1; dy <= sy; dy++) {
+        const above = grid[idx(sx, sy - dy)];
+        if (above === EMPTY) {
+          grid[idx(sx, sy - dy)] = srcType;
+          break;
+        }
+        if (above !== srcType) break; // Stop at anything that isn't our type
+      }
+    }
   }
 
   const dir = tick % 2 === 0 ? 1 : -1;
