@@ -93,8 +93,52 @@ function simulate() {
 
   // Sources emit their element
   for (let i = 0; i < sources.length; i++) {
-    if (sources[i] && grid[i] === EMPTY) {
-      grid[i] = sources[i];
+    if (!sources[i]) continue;
+    const sx = i % W, sy = (i / W) | 0;
+    const srcType = sources[i];
+
+    // Fire sources are suppressed if covered by anything
+    if (srcType === FIRE) {
+      if (grid[i] === EMPTY) grid[i] = FIRE;
+      continue;
+    }
+
+    // Liquid/particle sources: push upward if blocked
+    if (grid[i] === EMPTY) {
+      grid[i] = srcType;
+    } else if (grid[i] === srcType) {
+      // Already full of our type — push the particle up
+      // Find the first empty or displaceable cell above
+      for (let dy = 1; dy <= sy; dy++) {
+        const aboveIdx = idx(sx, sy - dy);
+        if (grid[aboveIdx] === EMPTY) {
+          grid[aboveIdx] = srcType;
+          break;
+        }
+        const aboveType = grid[aboveIdx];
+        // Stop pushing through solids (stone, wood, grass) or other liquids of different type
+        if (aboveType === STONE || aboveType === WOOD || aboveType === GRASS || aboveType === VINE) break;
+        // Can push through sand/salt (displace them down)
+        if (aboveType === SAND || aboveType === SALT) {
+          grid[aboveIdx] = srcType;
+          // Push the sand/salt to the source cell's position (it'll fall next frame)
+          // Actually just find next empty below to drop it
+          let placed = false;
+          for (let ddy = 1; sy + ddy < H; ddy++) {
+            if (grid[idx(sx, sy + ddy)] === EMPTY) {
+              grid[idx(sx, sy + ddy)] = aboveType;
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) grid[aboveIdx] = aboveType; // undo if nowhere to put it
+          break;
+        }
+        // Same liquid type above — keep going up
+        if (aboveType === srcType) continue;
+        // Different liquid — stop
+        break;
+      }
     }
   }
 
@@ -162,12 +206,12 @@ function updateSalt(x, y) {
 }
 
 function updateWater(x, y) {
-  if (!fall(x, y, false)) flowSide(x, y, 5);
+  if (!fall(x, y, false)) flowSide(x, y, 2);
 }
 
 function updateOil(x, y) {
   if (get(x, y + 1) === WATER) { swap(x, y, x, y + 1); updated[idx(x, y + 1)] = 1; return; }
-  if (!fall(x, y, false)) flowSide(x, y, 3);
+  if (!fall(x, y, false)) flowSide(x, y, 2);
 }
 
 function updateGrass(x, y) {
@@ -421,6 +465,8 @@ function loop() {
     const cy = (lastRawY - rect.top) / SCALE | 0;
     paintAt(cx, cy);
   }
+  simulate();
+  simulate();
   simulate();
   simulate();
   render();
