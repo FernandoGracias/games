@@ -70,7 +70,7 @@ window.addEventListener('resize', resize);
 // Element types
 const EMPTY=0,SAND=1,WATER=2,OIL=3,FIRE=4,STONE=5,WOOD=6,SALT=7,SOIL=8;
 const GRASS_SEED=9,VINE_SEED=10,TREE_SEED=11,GRASS=12,VINE=13,TRUNK=14;
-const LEAF=15,FLOWER=16,STEAM=17,WET_SOIL=18,ROOT=19,SAPLING=20,APPLE=21,POWDER=22,CHARCOAL=23;
+const LEAF=15,FLOWER=16,STEAM=17,WET_SOIL=18,ROOT=19,SAPLING=20,APPLE=21,POWDER=22,CHARCOAL=23,EMBER=24;
 
 // ABGR packed colors (little-endian Uint32)
 const COLORS = new Uint32Array(32);
@@ -98,6 +98,7 @@ COLORS[SAPLING]   = 0xFF1E823C;
 COLORS[APPLE]     = 0xFF1E1EC8;
 COLORS[POWDER]    = 0xFF303030;
 COLORS[CHARCOAL]  = 0xFF1A1A1A;
+COLORS[EMBER]     = 0xFF0020A0;
 
 const STATIC = new Uint8Array(32);
 STATIC[STONE]=1; STATIC[WOOD]=1; STATIC[TRUNK]=1; STATIC[LEAF]=1; STATIC[FLOWER]=1; STATIC[ROOT]=1;
@@ -155,7 +156,8 @@ function simulate() {
         case SAPLING: simSapling(x, y, i); break;
         case APPLE: simApple(x, y, i); break;
         case POWDER: fall(x, y, i, true); break;
-        case CHARCOAL: if(rng()<0.003) grid[i]=EMPTY; break;
+        case CHARCOAL: if(rng()<0.003) grid[i]=EMBER; break;
+        case EMBER: if(rng()<0.01) grid[i]=EMPTY; break;
       }
     }
   }
@@ -266,17 +268,39 @@ function simFire(x,y,i) {
 }
 
 function explode(cx, cy) {
-  const radius = 4 + (rng()*3|0);
+  // Check confinement — count solid neighbors in a small radius
+  let solids = 0, total = 0;
+  for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++) {
+    total++;
+    const n = get(cx+dx, cy+dy);
+    if (n!==EMPTY && n!==FIRE && n!==STEAM) solids++;
+  }
+  const confinement = solids / total; // 0=open air, 1=fully enclosed
+
+  if (confinement < 0.3) {
+    // Open air — just rapid combustion, no blast damage
+    for (let dy=-2;dy<=2;dy++) for (let dx=-2;dx<=2;dx++) {
+      const nx=cx+dx,ny=cy+dy;
+      if (nx>=0&&nx<W&&ny>=0&&ny<H) {
+        const ni=ny*W+nx;
+        if (grid[ni]===POWDER) { grid[ni]=FIRE; fireAge[ni]=0; }
+      }
+    }
+    return;
+  }
+
+  // Confined — destructive explosion, radius scales with confinement
+  const radius = Math.floor(3 + confinement * 5);
   for (let dy=-radius;dy<=radius;dy++) for (let dx=-radius;dx<=radius;dx++) {
     if (dx*dx+dy*dy > radius*radius) continue;
     const nx=cx+dx, ny=cy+dy;
     if (nx<0||nx>=W||ny<0||ny>=H) continue;
     const ni=ny*W+nx;
     const n=grid[ni];
-    if (n===STONE) continue; // stone survives
-    if (n===POWDER) { grid[ni]=FIRE; continue; } // chain reaction
-    if (rng()<0.6) grid[ni]=EMPTY;
-    else if (rng()<0.3) grid[ni]=FIRE;
+    if (n===STONE) continue;
+    if (n===POWDER) { grid[ni]=FIRE; fireAge[ni]=0; continue; }
+    if (rng()<0.7) grid[ni]=EMPTY;
+    else if (rng()<0.4) { grid[ni]=FIRE; fireAge[ni]=0; }
   }
 }
 
@@ -428,6 +452,9 @@ function render() {
       else if (v < 0.8) { r=255; g=180+(rng()*75|0); b=0; }                 // yellow
       else { r=255; g=220+(rng()*35|0); b=100+(rng()*100|0); }              // white-hot
       buf32[i] = 0xFF000000 | (b << 16) | (g << 8) | r;
+    } else if (t === EMBER) {
+      const r=120+(rng()*80|0), g=20+(rng()*30|0);
+      buf32[i] = 0xFF000000 | (g << 8) | r;
     } else if (sources[i] && t === EMPTY) {
       const c = COLORS[sources[i]];
       buf32[i] = (c & 0xFF000000) | (Math.min(255,((c>>16)&0xFF)+40)<<16) | (Math.min(255,((c>>8)&0xFF)+40)<<8) | Math.min(255,(c&0xFF)+40);
