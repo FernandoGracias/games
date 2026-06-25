@@ -99,6 +99,7 @@ const STATIC = new Uint8Array(32);
 STATIC[STONE]=1; STATIC[WOOD]=1; STATIC[TRUNK]=1; STATIC[LEAF]=1; STATIC[FLOWER]=1; STATIC[ROOT]=1;
 
 function get(x, y) { return (x >= 0 && x < W && y >= 0 && y < H) ? grid[y * W + x] : STONE; }
+function set(x, y, v) { if (x >= 0 && x < W && y >= 0 && y < H) grid[y * W + x] = v; }
 function isEmpty(x, y) { return get(x, y) === EMPTY; }
 function isLiquid(t) { return t === WATER || t === OIL; }
 
