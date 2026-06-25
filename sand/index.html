@@ -112,7 +112,7 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources emit — liquids well up through heavier layers via pressure
+  // Sources emit — liquids well up, filling containers and overflowing
   for (let i = 0; i < sources.length; i++) {
     if (!sources[i]) continue;
     const srcType = sources[i];
@@ -120,33 +120,31 @@ function simulate() {
       grid[i] = srcType;
       continue;
     }
-    // Only water and oil have well behavior
+    // Only water and oil well
     if (srcType !== WATER && srcType !== OIL) continue;
 
-    // Check what's directly above — only well if buried under passable layers
     const sx = i % W, sy = (i / W) | 0;
-    const above = sy > 0 ? grid[idx(sx, sy - 1)] : STONE;
 
-    // Determine what this liquid can push through (heavier materials)
-    // Water rises through: sand, salt, soil, wet soil
-    // Oil rises through: water, sand, salt, soil, wet soil, oil
-    function canPassThrough(cell) {
-      if (srcType === WATER) return cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL || cell === WATER;
-      if (srcType === OIL) return cell === WATER || cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL || cell === OIL;
+    // What can this liquid pass through when welling up?
+    // Water: empty, water, sand, salt, soil, wet soil
+    // Oil: empty, oil, water, sand, salt, soil, wet soil
+    // Stopped by: stone, wood, trunk, leaf, grass, vine, flower, etc.
+    function canWellThrough(cell) {
+      if (cell === EMPTY) return true;
+      if (cell === SAND || cell === SALT || cell === SOIL || cell === WET_SOIL) return true;
+      if (srcType === WATER && cell === WATER) return true;
+      if (srcType === OIL && (cell === OIL || cell === WATER)) return true;
       return false;
     }
 
-    // Only well if the cell above is a passable layer (not empty, not a wall)
-    if (!canPassThrough(above)) continue;
-
-    // Scan up through passable layers, place at first empty cell
+    // Scan up, place at first empty cell reachable through passable layers
     for (let dy = 1; dy <= sy; dy++) {
       const cell = grid[idx(sx, sy - dy)];
       if (cell === EMPTY) {
         grid[idx(sx, sy - dy)] = srcType;
         break;
       }
-      if (!canPassThrough(cell)) break;
+      if (!canWellThrough(cell)) break;
     }
   }
 
