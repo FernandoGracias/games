@@ -502,9 +502,9 @@ function paintAt(cx,cy){
     if(cx>=0&&cx<W&&cy>=0&&cy<H){
       if(sparse&&rng()>0.15)return;
       const i=cy*W+cx;
-      if(isSource){sources[i]=currentElement;if(grid[i]===EMPTY)grid[i]=currentElement;}
+      if(isSource){sources[i]=currentElement;if(grid[i]===EMPTY||currentElement===OIL)grid[i]=currentElement;}
       else if(erasing){grid[i]=EMPTY;sources[i]=0;}
-      else if(currentElement===WOOD||currentElement===STONE)grid[i]=currentElement;
+      else if(currentElement===WOOD||currentElement===STONE||currentElement===OIL)grid[i]=currentElement;
       else if(grid[i]===EMPTY||currentElement===FIRE)grid[i]=currentElement;
     }
     return;
@@ -515,9 +515,9 @@ function paintAt(cx,cy){
     const px=cx+dx,py=cy+dy;
     if(px>=0&&px<W&&py>=0&&py<H){
       const i=py*W+px;
-      if(isSource){sources[i]=currentElement;if(grid[i]===EMPTY)grid[i]=currentElement;}
+      if(isSource){sources[i]=currentElement;if(grid[i]===EMPTY||currentElement===OIL)grid[i]=currentElement;}
       else if(erasing){grid[i]=EMPTY;sources[i]=0;}
-      else if(currentElement===WOOD||currentElement===STONE)grid[i]=currentElement;
+      else if(currentElement===WOOD||currentElement===STONE||currentElement===OIL)grid[i]=currentElement;
       else if(grid[i]===EMPTY||currentElement===FIRE)grid[i]=currentElement;
     }
   }
