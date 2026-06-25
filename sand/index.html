@@ -112,55 +112,49 @@ function simulate() {
   tick++;
   updated.fill(0);
 
-  // Sources emit with pressure physics (BFS to find nearest empty reachable through liquid)
-  // Throttled: only run BFS every 6 frames to save perf
-  if (tick % 6 === 0) {
-    for (let i = 0; i < sources.length; i++) {
-      if (!sources[i]) continue;
-      const srcType = sources[i];
-      if (grid[i] === EMPTY) {
-        grid[i] = srcType;
-        continue;
-      }
-      // Only water/oil have pressure
-      if (srcType !== WATER && srcType !== OIL) continue;
-      if (grid[i] !== srcType) continue;
+  // Sources emit with pressure physics (BFS through connected liquid to find empty)
+  for (let i = 0; i < sources.length; i++) {
+    if (!sources[i]) continue;
+    const srcType = sources[i];
+    if (grid[i] === EMPTY) {
+      grid[i] = srcType;
+      continue;
+    }
+    if (srcType !== WATER && srcType !== OIL) continue;
+    if (grid[i] !== srcType) continue;
 
-      // BFS: find nearest empty cell reachable through connected same-type liquid
-      const sx = i % W, sy = (i / W) | 0;
-      const visited = new Uint8Array(W * H);
-      const queue = [[sx, sy]];
-      visited[i] = 1;
-      let found = false;
-      let steps = 0;
-      const maxSteps = 2000;
+    const sx = i % W, sy = (i / W) | 0;
+    const visited = updated; // reuse the updated buffer (already zeroed at top of simulate)
+    // Mark visited with a unique value so we don't conflict
+    const mark = 2;
+    const queue = [sx + sy * W];
+    visited[i] = mark;
+    let found = false;
 
-      while (queue.length > 0 && steps < maxSteps) {
-        steps++;
-        const [cx, cy] = queue.shift();
-        const neighbors = [[cx, cy+1], [cx-1, cy], [cx+1, cy], [cx, cy-1]];
-        for (const [nx, ny] of neighbors) {
-          if (!inBounds(nx, ny)) continue;
-          const ni = idx(nx, ny);
-          if (visited[ni]) continue;
-          visited[ni] = 1;
-          const cell = grid[ni];
-          if (cell === EMPTY) {
-            grid[ni] = srcType;
-            found = true;
-            break;
-          }
-          if (cell === srcType) queue.push([nx, ny]);
-          if (srcType === OIL && cell === WATER) queue.push([nx, ny]);
+    while (queue.length > 0) {
+      const ci = queue.shift();
+      const cx = ci % W, cy = (ci / W) | 0;
+      const neighbors = [cx + (cy+1)*W, (cx-1) + cy*W, (cx+1) + cy*W, cx + (cy-1)*W];
+      for (let n = 0; n < 4; n++) {
+        const nx = [cx, cx-1, cx+1, cx][n];
+        const ny = [cy+1, cy, cy, cy-1][n];
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const ni = ny * W + nx;
+        if (visited[ni] === mark) continue;
+        visited[ni] = mark;
+        const cell = grid[ni];
+        if (cell === EMPTY) {
+          grid[ni] = srcType;
+          found = true;
+          break;
         }
-        if (found) break;
+        if (cell === srcType) queue.push(ni);
+        else if (srcType === OIL && cell === WATER) queue.push(ni);
       }
+      if (found) break;
     }
-  } else {
-    // Non-BFS frames: just emit into own cell if empty
-    for (let i = 0; i < sources.length; i++) {
-      if (sources[i] && grid[i] === EMPTY) grid[i] = sources[i];
-    }
+    // Clean up visited marks
+    for (let j = 0; j < visited.length; j++) if (visited[j] === mark) visited[j] = 0;
   }
 
   const dir = tick % 2 === 0 ? 1 : -1;
