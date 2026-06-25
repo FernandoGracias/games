@@ -110,36 +110,9 @@ function simulate() {
   tick++;
   const dir = tick & 1;
 
-  // Sources — BFS pressure for water/oil (every 4th frame for perf)
+  // Sources — just emit when cell is empty
   for (let i = 0; i < sources.length; i++) {
-    if (!sources[i]) continue;
-    const st = sources[i];
-    if (grid[i] === EMPTY) { grid[i] = st; continue; }
-    if ((st === WATER || st === OIL) && grid[i] === st && (tick & 3) === 0) {
-      // BFS to find nearest empty through connected same-type
-      const visited = new Uint8Array(W * H);
-      const q = [i];
-      visited[i] = 1;
-      let found = false;
-      while (q.length > 0) {
-        const ci = q.shift();
-        const cx = ci % W, cy = (ci / W) | 0;
-        // down, left, right, up
-        const nx = [cx, cx-1, cx+1, cx];
-        const ny = [cy+1, cy, cy, cy-1];
-        for (let n = 0; n < 4; n++) {
-          if (nx[n] < 0 || nx[n] >= W || ny[n] < 0 || ny[n] >= H) continue;
-          const ni = ny[n] * W + nx[n];
-          if (visited[ni]) continue;
-          visited[ni] = 1;
-          const cell = grid[ni];
-          if (cell === EMPTY) { grid[ni] = st; found = true; break; }
-          if (cell === st) q.push(ni);
-          else if (st === OIL && cell === WATER) q.push(ni);
-        }
-        if (found) break;
-      }
-    }
+    if (sources[i] && grid[i] === EMPTY) grid[i] = sources[i];
   }
 
   // Rain
