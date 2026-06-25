@@ -26,7 +26,7 @@ canvas { flex: 1; cursor: crosshair; image-rendering: pixelated; }
   <button class="btn" data-el="stone">Stone</button>
   <button class="btn" data-el="salt">Salt</button>
   <button class="btn" data-el="eraser">Eraser</button>
-  <span class="size-label">Size: <input type="range" id="brushSize" min="1" max="12" value="3" style="vertical-align:middle;width:60px;"></span>
+  <span class="size-label">Size: <input type="range" id="brushSize" min="0" max="12" value="3" style="vertical-align:middle;width:60px;"></span>
   <button class="btn" id="clearBtn" style="margin-left:auto;">Clear</button>
 </div>
 <canvas id="c"></canvas>
@@ -53,19 +53,18 @@ window.addEventListener('resize', () => { resize(); });
 // Element types
 const EMPTY = 0, SAND = 1, WATER = 2, GRASS = 3, FIRE = 4, OIL = 5, WOOD = 6, STONE = 7, SALT = 8, VINE = 9, STEAM = 10;
 
-// Element colors (with slight variation for visual interest)
-function getColor(type, x, y) {
-  const v = ((x * 31 + y * 17) % 20) - 10;
+// Element colors — solid per type
+function getColor(type) {
   switch(type) {
-    case SAND: return [194 + v, 178 + v, 128 + v];
-    case WATER: return [30 + v, 100 + v, 200 + v];
-    case GRASS: return [20 + v, 160 + v, 40 + v];
-    case FIRE: return [255, 100 + (Math.random()*100|0), 0];
-    case OIL: return [60 + v, 40 + v, 80 + v];
-    case WOOD: return [100 + v, 70 + v, 30 + v];
-    case STONE: return [120 + v, 120 + v, 120 + v];
-    case SALT: return [230 + v, 230 + v, 240 + v];
-    case VINE: return [10 + v, 200 + v, 60 + v];
+    case SAND: return [194, 178, 128];
+    case WATER: return [30, 100, 200];
+    case GRASS: return [20, 160, 40];
+    case FIRE: return [255, 150 + (Math.random()*80|0), 0];
+    case OIL: return [60, 40, 80];
+    case WOOD: return [100, 70, 30];
+    case STONE: return [120, 120, 120];
+    case SALT: return [230, 230, 240];
+    case VINE: return [10, 200, 60];
     case STEAM: return [200, 200, 220];
     default: return [0, 0, 0];
   }
@@ -128,10 +127,24 @@ function fall(x, y, canDisplace) {
   return false;
 }
 
-function flowSide(x, y) {
+function flowSide(x, y, spread) {
   const d = Math.random() < 0.5 ? -1 : 1;
-  if (isEmpty(x + d, y)) { swap(x, y, x + d, y); updated[idx(x + d, y)] = 1; return true; }
-  if (isEmpty(x - d, y)) { swap(x, y, x - d, y); updated[idx(x - d, y)] = 1; return true; }
+  for (let i = 1; i <= spread; i++) {
+    if (isEmpty(x + d * i, y)) {
+      swap(x, y, x + d * i, y);
+      updated[idx(x + d * i, y)] = 1;
+      return true;
+    }
+    if (get(x + d * i, y) !== EMPTY) break;
+  }
+  for (let i = 1; i <= spread; i++) {
+    if (isEmpty(x - d * i, y)) {
+      swap(x, y, x - d * i, y);
+      updated[idx(x - d * i, y)] = 1;
+      return true;
+    }
+    if (get(x - d * i, y) !== EMPTY) break;
+  }
   return false;
 }
 
@@ -151,20 +164,20 @@ function updateSalt(x, y) {
 }
 
 function updateWater(x, y) {
-  if (!fall(x, y, false)) flowSide(x, y);
+  if (!fall(x, y, false)) flowSide(x, y, 5);
 }
 
 function updateOil(x, y) {
   // Oil floats on water — swap up if water is above? No, just falls slower and flows
   if (get(x, y + 1) === WATER) { swap(x, y, x, y + 1); updated[idx(x, y + 1)] = 1; return; }
-  if (!fall(x, y, false)) flowSide(x, y);
+  if (!fall(x, y, false)) flowSide(x, y, 3);
 }
 
 function updateGrass(x, y) {
-  // Grass is static but grows vines when touching water
+  // Grass grows vines aggressively when touching water
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      if (get(x + dx, y + dy) === WATER && Math.random() < 0.05) {
+      if (get(x + dx, y + dy) === WATER && Math.random() < 0.2) {
         set(x + dx, y + dy, VINE);
         updated[idx(x + dx, y + dy)] = 1;
       }
@@ -173,22 +186,29 @@ function updateGrass(x, y) {
 }
 
 function updateVine(x, y) {
-  // Vine grows in random directions when near water
-  if (Math.random() < 0.03) {
+  // Vine grows aggressively in random directions when near water
+  if (Math.random() < 0.15) {
     const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
     const [dx, dy] = dirs[Math.random() * dirs.length | 0];
     const nx = x + dx, ny = y + dy;
     if (isEmpty(nx, ny)) {
-      // Only grow if water is nearby
+      // Grow if water is within 4 cells
       let hasWater = false;
-      for (let ddx = -2; ddx <= 2; ddx++) {
-        for (let ddy = -2; ddy <= 2; ddy++) {
-          if (get(nx + ddx, ny + ddy) === WATER) { hasWater = true; break; }
+      for (let ddx = -4; ddx <= 4 && !hasWater; ddx++) {
+        for (let ddy = -4; ddy <= 4 && !hasWater; ddy++) {
+          if (get(nx + ddx, ny + ddy) === WATER) hasWater = true;
         }
-        if (hasWater) break;
       }
       if (hasWater) { set(nx, ny, VINE); updated[idx(nx, ny)] = 1; }
     }
+  }
+  // Vines can also spontaneously sprout grass at tips
+  if (Math.random() < 0.01) {
+    let openNeighbors = 0;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        if (isEmpty(x + dx, y + dy)) openNeighbors++;
+    if (openNeighbors >= 5) set(x, y, GRASS);
   }
 }
 
@@ -226,6 +246,7 @@ function updateSteam(x, y) {
 // Drawing
 let drawing = false;
 let currentElement = SAND;
+let lastPaintX = -1, lastPaintY = -1;
 const elementMap = { sand: SAND, water: WATER, grass: GRASS, fire: FIRE, oil: OIL, wood: WOOD, stone: STONE, salt: SALT, eraser: EMPTY };
 
 document.querySelectorAll('.btn[data-el]').forEach(btn => {
@@ -238,17 +259,21 @@ document.querySelectorAll('.btn[data-el]').forEach(btn => {
 
 document.getElementById('clearBtn').addEventListener('click', () => { grid.fill(0); });
 
-function paint(ex, ey) {
-  const rect = canvas.getBoundingClientRect();
-  const cx = (ex - rect.left) / SCALE | 0;
-  const cy = (ey - rect.top) / SCALE | 0;
+function paintAt(cx, cy) {
   const r = parseInt(document.getElementById('brushSize').value);
+  if (r === 0) {
+    if (inBounds(cx, cy)) {
+      if (currentElement === EMPTY || get(cx, cy) === EMPTY || currentElement === FIRE)
+        set(cx, cy, currentElement);
+    }
+    return;
+  }
   for (let dx = -r; dx <= r; dx++) {
     for (let dy = -r; dy <= r; dy++) {
       if (dx * dx + dy * dy <= r * r) {
         const px = cx + dx, py = cy + dy;
         if (inBounds(px, py)) {
-          if (currentElement === EMPTY || get(px, py) === EMPTY || (currentElement === FIRE)) {
+          if (currentElement === EMPTY || get(px, py) === EMPTY || currentElement === FIRE) {
             set(px, py, currentElement);
           }
         }
@@ -257,13 +282,34 @@ function paint(ex, ey) {
   }
 }
 
-canvas.addEventListener('mousedown', (e) => { drawing = true; paint(e.clientX, e.clientY); });
+function paint(ex, ey) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = (ex - rect.left) / SCALE | 0;
+  const cy = (ey - rect.top) / SCALE | 0;
+  // Interpolate from last position for continuous strokes
+  if (lastPaintX >= 0) {
+    const dx = cx - lastPaintX, dy = cy - lastPaintY;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0 : i / steps;
+      const px = lastPaintX + (dx * t) | 0;
+      const py = lastPaintY + (dy * t) | 0;
+      paintAt(px, py);
+    }
+  } else {
+    paintAt(cx, cy);
+  }
+  lastPaintX = cx;
+  lastPaintY = cy;
+}
+
+canvas.addEventListener('mousedown', (e) => { drawing = true; lastPaintX = -1; lastPaintY = -1; paint(e.clientX, e.clientY); });
 canvas.addEventListener('mousemove', (e) => { if (drawing) paint(e.clientX, e.clientY); });
-canvas.addEventListener('mouseup', () => { drawing = false; });
-canvas.addEventListener('mouseleave', () => { drawing = false; });
-canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
+canvas.addEventListener('mouseup', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
+canvas.addEventListener('mouseleave', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); drawing = true; lastPaintX = -1; lastPaintY = -1; paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
 canvas.addEventListener('touchmove', (e) => { e.preventDefault(); if (drawing) paint(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
-canvas.addEventListener('touchend', () => { drawing = false; });
+canvas.addEventListener('touchend', () => { drawing = false; lastPaintX = -1; lastPaintY = -1; });
 
 // Render
 const imgData = ctx.createImageData(canvas.width, canvas.height);
@@ -275,7 +321,7 @@ function render() {
     for (let x = 0; x < W; x++) {
       const type = grid[idx(x, y)];
       if (type === EMPTY) continue;
-      const [r, g, b] = getColor(type, x, y);
+      const [r, g, b] = getColor(type);
       // Fill the SCALE x SCALE block
       for (let sy = 0; sy < SCALE; sy++) {
         for (let sx = 0; sx < SCALE; sx++) {
