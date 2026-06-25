@@ -131,7 +131,7 @@ function simulate() {
     visited[i] = 1;
     let found = false;
     let steps = 0;
-    const maxSteps = 200; // cap search to avoid perf issues
+    const maxSteps = 2000; // cap search to avoid perf issues
 
     while (queue.length > 0 && steps < maxSteps) {
       steps++;
